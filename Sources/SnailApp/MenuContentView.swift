@@ -184,8 +184,29 @@ struct MenuContentView: View {
 
     private var appsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Apps now")
-                .font(.subheadline.weight(.semibold))
+            HStack {
+                Text("Apps now")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Picker("Sort apps by", selection: Binding(
+                    get: { model.appSort },
+                    set: { model.chooseAppSort($0) }
+                )) {
+                    Image(systemName: "arrow.down")
+                        .accessibilityLabel("Sort by download")
+                        .help("Sort by download")
+                        .tag(SnailModel.AppSort.download)
+                    Image(systemName: "arrow.up")
+                        .accessibilityLabel("Sort by upload")
+                        .help("Sort by upload")
+                        .tag(SnailModel.AppSort.upload)
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .labelsHidden()
+                .accessibilityLabel("Sort apps by")
+                .frame(width: 64)
+            }
 
             if model.topApps.isEmpty {
                 Text("No apps are using the network.")
@@ -194,7 +215,7 @@ struct MenuContentView: View {
             } else {
                 VStack(spacing: 6) {
                     ForEach(model.topApps) { app in
-                        AppUsageRow(app: app)
+                        AppUsageRow(app: app, sort: model.appSort)
                     }
                 }
             }
@@ -274,6 +295,7 @@ struct RateReadout: View {
 
 struct AppUsageRow: View {
     let app: AppUsage
+    let sort: SnailModel.AppSort
 
     var body: some View {
         HStack(spacing: 8) {
@@ -285,7 +307,12 @@ struct AppUsageRow: View {
             Spacer(minLength: 8)
             Text("↓ \(Rate.format(kbps: app.downKbps))")
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(sort == .download ? Color.primary : Color.secondary)
+                .frame(minWidth: 72, alignment: .trailing)
+            Text("↑ \(Rate.format(kbps: app.upKbps))")
+                .monospacedDigit()
+                .foregroundStyle(sort == .upload ? Color.primary : Color.secondary)
+                .frame(minWidth: 72, alignment: .trailing)
         }
         .font(.callout)
         .accessibilityElement(children: .ignore)

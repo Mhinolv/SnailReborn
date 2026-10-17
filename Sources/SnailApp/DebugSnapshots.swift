@@ -14,6 +14,13 @@ enum DebugSnapshots {
                 render(MenuContentView(model: model), to: "\(dir)/menu-\(name).png", appearance: appearance)
                 render(SettingsView(model: model), to: "\(dir)/settings-\(name).png", appearance: appearance)
             }
+            for sort in SnailModel.AppSort.allCases {
+                model.debugSimulate(active: nil, error: nil, appSort: sort)
+                for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                    render(MenuContentView(model: model),
+                           to: "\(dir)/menu-apps-\(sort.rawValue)-\(name).png", appearance: appearance)
+                }
+            }
             render(GlyphSheet(), to: "\(dir)/glyph.png", appearance: .aqua)
             let iface = model.wifiInterface ?? "en0"
             model.debugSimulate(active: ThrottleConfig(kbps: 1_500, mode: .total, scope: .web, interface: iface), error: nil)

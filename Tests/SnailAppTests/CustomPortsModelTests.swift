@@ -11,7 +11,7 @@ final class CustomPortsModelTests: XCTestCase {
         let runner = SpyRunner()
         let path = NSTemporaryDirectory() + UUID().uuidString
         let controller = ThrottleController(runner: runner, statePath: path)
-        let model = SnailModel(defaults: defaults, controller: controller, wifiInterface: "en12", sample: false)
+        let model = SnailModel(defaults: defaults, controller: controller, wifiInterface: "en12", samplesAutomatically: false)
         XCTAssertEqual(model.scope, .web)
         XCTAssertEqual(model.ports, [])
         model.scope = .custom
@@ -27,7 +27,7 @@ final class CustomPortsModelTests: XCTestCase {
         XCTAssertEqual(model.errorMessage, ThrottleConfig.portsError)
         XCTAssertFalse(model.isBusy)
         XCTAssertTrue(runner.scripts.isEmpty)
-        let restored = SnailModel(defaults: defaults, controller: controller, wifiInterface: "en12", sample: false)
+        let restored = SnailModel(defaults: defaults, controller: controller, wifiInterface: "en12", samplesAutomatically: false)
         XCTAssertEqual(restored.scope, .custom)
         XCTAssertEqual(restored.portsText, "25461, 8080")
     }
@@ -42,7 +42,7 @@ final class CustomPortsModelTests: XCTestCase {
             let runner = SpyRunner()
             runner.onRun = { called.fulfill() }
             let controller = ThrottleController(runner: runner, statePath: NSTemporaryDirectory() + UUID().uuidString)
-            let model = SnailModel(defaults: defaults, controller: controller, wifiInterface: "en12", sample: false)
+            let model = SnailModel(defaults: defaults, controller: controller, wifiInterface: "en12", samplesAutomatically: false)
             model.scope = scope
             model.portsText = scope == .custom ? "1,65535,1" : "invalid"
             model.apply()
