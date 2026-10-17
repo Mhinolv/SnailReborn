@@ -36,6 +36,7 @@ final class SnailModel: ObservableObject {
     private var budgetTracker: DataBudget
     @Published private(set) var budget: DataBudget
     @Published var budgetAmountText: String
+    @Published private(set) var budgetUnit: DataBudget.Unit
 
     // Live state
     @Published private(set) var active: ThrottleConfig?
@@ -78,6 +79,7 @@ final class SnailModel: ObservableObject {
         budgetTracker = savedBudget
         budget = savedBudget
         budgetAmountText = String(savedBudget.amount)
+        budgetUnit = savedBudget.unit
         usageHistory = UsageHistory.load(from: defaults)
         usageDays = usageHistory.days
         let d = defaults
@@ -256,9 +258,27 @@ final class SnailModel: ObservableObject {
         ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
     }
 
+    private var budgetOverBytes: UInt64 {
+        budget.usedBytes > budget.limitBytes ? budget.usedBytes - budget.limitBytes : 0
+    }
+
+    var budgetRemainingText: String {
+        if budgetOverBytes > 0 { return "0 bytes (\(Self.usageBytes(budgetOverBytes)) over)" }
+        return budget.remainingBytes == 0 ? "0 bytes" : Self.usageBytes(budget.remainingBytes)
+    }
+
+    var budgetCaption: String {
+        if budgetOverBytes > 0 { return "Budget: \(Self.usageBytes(budgetOverBytes)) over" }
+        return "Budget: \(budgetRemainingText) left"
+    }
+
+    var budgetAlertDetail: String {
+        "You used \(Self.usageBytes(budget.usedBytes)) of Wi-Fi data. Snail does not stop traffic."
+    }
+
     var budgetValidationMessage: String? {
-        guard let amount = Int(budgetAmountText), (1...DataBudget.maximumAmount).contains(amount) else {
-            return "Enter a whole number from 1 to 1,000,000."
+        guard let amount = Int(budgetAmountText), DataBudget.isValidAmount(amount, unit: budgetUnit) else {
+            return "Enter a whole number from 100 MB to 10,000 GB."
         }
         return nil
     }
@@ -270,14 +290,13 @@ final class SnailModel: ObservableObject {
 
     func commitBudgetAmount() {
         guard budgetValidationMessage == nil, let amount = Int(budgetAmountText) else { return }
-        budgetTracker.setAmount(amount, unit: budget.unit)
+        budgetTracker.setAmount(amount, unit: budgetUnit)
         saveBudget()
     }
 
     func chooseBudgetUnit(_ unit: DataBudget.Unit) {
-        guard budgetValidationMessage == nil, let amount = Int(budgetAmountText) else { return }
-        budgetTracker.setAmount(amount, unit: unit)
-        saveBudget()
+        budgetUnit = unit
+        commitBudgetAmount()
     }
 
     func resetBudget() {

@@ -220,7 +220,7 @@ struct SettingsView: View {
                         .frame(width: 100)
                         .accessibilityLabel("Data budget amount")
                     Picker("Unit", selection: Binding(
-                        get: { model.budget.unit }, set: { model.chooseBudgetUnit($0) }
+                        get: { model.budgetUnit }, set: { model.chooseBudgetUnit($0) }
                     )) {
                         ForEach(DataBudget.Unit.allCases, id: \.self) { unit in
                             Text(unit.rawValue).tag(unit)
@@ -236,7 +236,7 @@ struct SettingsView: View {
                     .font(.caption)
             }
             LabeledContent("Used", value: SnailModel.usageBytes(model.budget.usedBytes))
-            LabeledContent("Remaining", value: SnailModel.usageBytes(model.budget.remainingBytes))
+            LabeledContent("Remaining", value: model.budgetRemainingText)
             ProgressView(value: model.budget.progress)
                 .accessibilityLabel("Data budget used")
                 .accessibilityValue("\(Int(model.budget.progress * 100)) percent")

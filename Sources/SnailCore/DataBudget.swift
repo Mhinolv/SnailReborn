@@ -8,7 +8,13 @@ public struct DataBudget: Codable, Equatable {
     }
 
     public static let key = "dataBudget"
-    public static let maximumAmount = 1_000_000
+    public static func amountRange(for unit: Unit) -> ClosedRange<Int> {
+        unit == .mb ? 100...10_000_000 : 1...10_000
+    }
+
+    public static func isValidAmount(_ amount: Int, unit: Unit) -> Bool {
+        amountRange(for: unit).contains(amount)
+    }
     public private(set) var enabled = false
     public private(set) var amount = 1_000
     public private(set) var unit = Unit.mb
@@ -31,7 +37,7 @@ public struct DataBudget: Codable, Equatable {
 
     @discardableResult
     public mutating func setAmount(_ value: Int, unit: Unit) -> Bool {
-        guard (1...Self.maximumAmount).contains(value) else { return false }
+        guard Self.isValidAmount(value, unit: unit) else { return false }
         amount = value
         self.unit = unit
         return true
@@ -83,9 +89,12 @@ public struct DataBudget: Codable, Equatable {
         unit = try values.decodeIfPresent(Unit.self, forKey: .unit) ?? .mb
         usedBytes = try values.decodeIfPresent(UInt64.self, forKey: .usedBytes) ?? 0
         dismissed = try values.decodeIfPresent(Bool.self, forKey: .dismissed) ?? false
-        guard (1...Self.maximumAmount).contains(amount) else {
+        guard amount > 0, amount <= max(Self.amountRange(for: unit).upperBound, 1_000_000) else {
             throw DecodingError.dataCorruptedError(forKey: .amount, in: values, debugDescription: "Invalid budget amount")
         }
+        // Keep totals and dismissal from version 1 budgets outside the corrected range.
+        let range = Self.amountRange(for: unit)
+        amount = min(max(amount, range.lowerBound), range.upperBound)
     }
 
     public func encode(to encoder: Encoder) throws {

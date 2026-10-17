@@ -104,23 +104,28 @@ enum DebugSnapshots {
             }
         }
         renderState("disabled")
-        model.budgetAmountText = "1"
+        model.budgetAmountText = "100"
         model.commitBudgetAmount()
         model.setBudgetEnabled(true)
         let date = Date()
         model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 0, bytesOut: 0), at: date)
-        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 400_000, bytesOut: 100_000),
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 40_000_000, bytesOut: 10_000_000),
                           at: date.addingTimeInterval(1))
         renderState("partial")
-        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 900_000, bytesOut: 100_000),
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 90_000_000, bytesOut: 10_000_000),
                           at: date.addingTimeInterval(2))
         renderState("reached")
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 110_000_000, bytesOut: 10_000_000),
+                          at: date.addingTimeInterval(3))
+        renderState("over")
         model.dismissBudgetAlert()
         renderState("dismissed")
         model.resetBudget()
         renderState("reset")
         model.budgetAmountText = "0"
         renderState("invalid")
+        model.budgetAmountText = "10000001"
+        renderState("above-maximum")
     }
 
     private static func renderUsageHistory(to dir: String) {

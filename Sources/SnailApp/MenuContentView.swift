@@ -99,12 +99,18 @@ struct MenuContentView: View {
 
     private var budgetBanner: some View {
         HStack(alignment: .top, spacing: 8) {
-            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
-            Text("Data budget reached").font(.callout.weight(.semibold))
+            Image(systemName: "gauge.with.dots.needle.100percent").foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Data budget reached").font(.callout.weight(.semibold))
+                Text(model.budgetAlertDetail)
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
             Spacer(minLength: 0)
             Button(action: model.dismissBudgetAlert) { Image(systemName: "xmark") }
                 .buttonStyle(.borderless)
-                .accessibilityLabel("Dismiss data budget alert")
+                .accessibilityLabel("Dismiss budget alert")
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.15)))
@@ -186,7 +192,7 @@ struct MenuContentView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if model.budget.enabled {
-                Text("Budget: \(SnailModel.usageBytes(model.budget.remainingBytes)) left")
+                Text(model.budgetCaption)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

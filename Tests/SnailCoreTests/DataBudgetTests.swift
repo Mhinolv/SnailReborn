@@ -10,11 +10,25 @@ final class DataBudgetTests: XCTestCase {
                       at: date.addingTimeInterval(second))
     }
 
+    func testDesignRangeBoundaries() {
+        for (unit, minimum, maximum) in [(DataBudget.Unit.mb, 100, 10_000_000), (.gb, 1, 10_000)] {
+            var budget = DataBudget()
+            for amount in [minimum, maximum] {
+                XCTAssertTrue(budget.setAmount(amount, unit: unit))
+                XCTAssertEqual(budget.limitBytes, UInt64(amount) * unit.bytes)
+            }
+            for amount in [Int.min, -1, 0, minimum - 1, maximum + 1, Int.max] {
+                XCTAssertFalse(budget.setAmount(amount, unit: unit), "Reject \(amount) \(unit.rawValue)")
+                XCTAssertEqual(budget.amount, maximum)
+            }
+        }
+    }
+
     func testSIUnitsBoundsAndThreshold() {
         for unit in DataBudget.Unit.allCases {
             var budget = DataBudget()
-            XCTAssertTrue(budget.setAmount(1, unit: unit))
-            XCTAssertEqual(budget.limitBytes, unit == .mb ? 1_000_000 : 1_000_000_000)
+            XCTAssertTrue(budget.setAmount(DataBudget.amountRange(for: unit).lowerBound, unit: unit))
+            XCTAssertEqual(budget.limitBytes, unit == .mb ? 100_000_000 : 1_000_000_000)
             budget.setEnabled(true)
             sample(&budget, 0, second: 0)
             sample(&budget, budget.limitBytes * 9 / 10, second: 1)
@@ -37,11 +51,11 @@ final class DataBudgetTests: XCTestCase {
             sample(&budget, 10, second: 4)
             sample(&budget, budget.limitBytes + 10, second: 5)
             XCTAssertTrue(budget.showsAlert)
-            XCTAssertTrue(budget.setAmount(DataBudget.maximumAmount, unit: unit))
-            XCTAssertEqual(budget.limitBytes, UInt64(DataBudget.maximumAmount) * unit.bytes)
-            for invalid in [Int.min, -1, 0, DataBudget.maximumAmount + 1, Int.max] {
+            XCTAssertTrue(budget.setAmount(DataBudget.amountRange(for: unit).upperBound, unit: unit))
+            XCTAssertEqual(budget.limitBytes, UInt64(DataBudget.amountRange(for: unit).upperBound) * unit.bytes)
+            for invalid in [Int.min, -1, 0, DataBudget.amountRange(for: unit).upperBound + 1, Int.max] {
                 XCTAssertFalse(budget.setAmount(invalid, unit: unit))
-                XCTAssertEqual(budget.amount, DataBudget.maximumAmount)
+                XCTAssertEqual(budget.amount, DataBudget.amountRange(for: unit).upperBound)
             }
         }
     }
@@ -88,6 +102,21 @@ final class DataBudgetTests: XCTestCase {
         XCTAssertTrue(budget.showsAlert)
     }
 
+    func testLegacyAmountsKeepTotalsAndDismissal() throws {
+        for (unit, amount, expected) in [("MB", 1, 100), ("GB", 1_000_000, 10_000)] {
+            let document = """
+            {"version":1,"enabled":true,"amount":\(amount),"unit":"\(unit)","usedBytes":123456789,"dismissed":true}
+            """
+            let budget = try JSONDecoder().decode(DataBudget.self, from: Data(document.utf8))
+            XCTAssertEqual(budget.amount, expected)
+            XCTAssertEqual(budget.unit.rawValue, unit)
+            XCTAssertEqual(budget.usedBytes, 123_456_789)
+            XCTAssertTrue(budget.enabled)
+            XCTAssertTrue(budget.dismissed)
+            XCTAssertEqual(try JSONDecoder().decode(DataBudget.self, from: JSONEncoder().encode(budget)), budget)
+        }
+    }
+
     func testPersistenceDefaultsAndInvalidDocuments() throws {
         let suite = "DataBudgetTests-\(UUID())"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
@@ -113,7 +142,7 @@ final class DataBudgetTests: XCTestCase {
             XCTAssertEqual(DataBudget.load(from: defaults), DataBudget())
         }
         for document in ["garbage", "{\"version\":2}", "{\"amount\":0}",
-                         "{\"amount\":1000001}", "{\"unit\":\"TB\"}", "{\"usedBytes\":-1}"] {
+                         "{\"amount\":10000001}", "{\"unit\":\"TB\"}", "{\"usedBytes\":-1}"] {
             defaults.set(Data(document.utf8), forKey: DataBudget.key)
             XCTAssertEqual(DataBudget.load(from: defaults), DataBudget())
         }
