@@ -1,0 +1,40 @@
+name: CI
+# Two jobs with fixed check names (the job id is the check name):
+#   build-and-test (macOS)  builds with warnings as errors and runs the XCTest suite.
+#   ci-gate        (ubuntu) the required merge check; passes only when build-and-test passed.
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: swift --version
+      - name: Build (zero warnings)
+        run: swift build -Xswiftc -warnings-as-errors
+      - name: Test
+        run: swift test
+  ci-gate:
+    needs: build-and-test
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require build-and-test success
+        env:
+          RESULT: ${{ needs.build-and-test.result }}
+        run: |
+          echo "build-and-test: $RESULT" >> "$GITHUB_STEP_SUMMARY"
+          [ "$RESULT" = success ]
