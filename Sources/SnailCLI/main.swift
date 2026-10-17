@@ -21,14 +21,10 @@ struct SnailCLI {
                 print("Stream Saver off. Snail's pf rules and pipe were removed.")
 
             case "status":
-                if let config = controller.activeConfig() {
-                    print("On: \(describe(config))")
-                } else {
-                    print("Off.")
-                }
-                if let wifi = WiFi.interfaceName(), let bypass = RoutePath.bypass(wifi: wifi) {
-                    print("Warning: \(bypass.explanation)")
-                }
+                let result = status(args, controller: controller)
+                print(result.stdout, terminator: "")
+                fputs(result.stderr, stderr)
+                exit(result.exitCode)
 
             case "apps":
                 let sampler = AppTrafficSampler()
@@ -64,6 +60,38 @@ struct SnailCLI {
             fputs("snailctl: \(error.localizedDescription)\n", stderr)
             exit(1)
         }
+    }
+
+    struct StatusResult {
+        var stdout = ""
+        var stderr = ""
+        var exitCode: Int32 = 0
+    }
+
+    static func status(_ args: [String], controller: ThrottleController,
+                       wifiInterface: () -> String? = { WiFi.interfaceName() },
+                       bypass: (String) -> RoutePath.Bypass? = { RoutePath.bypass(wifi: $0) }) -> StatusResult {
+        if let unknown = args.first(where: { $0 != "--json" }) {
+            return StatusResult(stderr: "Unknown option “\(unknown)”.\n", exitCode: 64)
+        }
+        if args.contains("--json") {
+            do {
+                let config = try controller.recordedConfig()
+                let wifi = wifiInterface()
+                let report = StatusReport(recordedConfig: config, stateFile: controller.statePath,
+                                          wifiInterface: wifi, bypass: wifi.flatMap(bypass))
+                return StatusResult(stdout: try report.json())
+            } catch let error as RecordedStateError {
+                return StatusResult(stderr: "snailctl: \(error.localizedDescription)\n", exitCode: error.exitCode)
+            } catch {
+                return StatusResult(stderr: "snailctl: \(error.localizedDescription)\n", exitCode: 1)
+            }
+        }
+        var output = controller.activeConfig().map { "On: \(describe($0))\n" } ?? "Off.\n"
+        if let wifi = wifiInterface(), let route = bypass(wifi) {
+            output += "Warning: \(route.explanation)\n"
+        }
+        return StatusResult(stdout: output)
     }
 
     static func parseConfig(_ args: [String]) throws -> ThrottleConfig {
@@ -115,7 +143,7 @@ struct SnailCLI {
         USAGE
           sudo snailctl on [options]   Start or update the limit
           sudo snailctl off            Remove Snail's rules (leaves everything else alone)
-          snailctl status              Show whether a limit is active (and whether a VPN bypasses it)
+          snailctl status [--json]       Show whether a limit is active (JSON with --json)
           snailctl apps                Show which apps are using the network right now
           snailctl rules [options]     Print the pf/dnctl rules without applying them
           snailctl script on|off [options]  Print the exact root script

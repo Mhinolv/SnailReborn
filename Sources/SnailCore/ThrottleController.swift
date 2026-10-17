@@ -73,4 +73,26 @@ public struct ThrottleController {
         guard let data = FileManager.default.contents(atPath: statePath) else { return nil }
         return try? JSONDecoder().decode(ThrottleConfig.self, from: data)
     }
+
+    /// Reads the saved config without a claim about live kernel state.
+    public func recordedConfig() throws -> ThrottleConfig {
+        let data: Data
+        do {
+            data = try Data(contentsOf: URL(fileURLWithPath: statePath))
+        } catch {
+            let fileError = error as NSError
+            if fileError.domain == NSCocoaErrorDomain,
+               fileError.code == NSFileReadNoSuchFileError || fileError.code == NSFileNoSuchFileError {
+                throw RecordedStateError.absent
+            }
+            throw RecordedStateError.unreadable(path: statePath, reason: error.localizedDescription)
+        }
+        do {
+            let config = try JSONDecoder().decode(ThrottleConfig.self, from: data)
+            _ = try config.validated()
+            return config
+        } catch {
+            throw RecordedStateError.invalid(path: statePath)
+        }
+    }
 }
