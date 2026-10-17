@@ -7,6 +7,9 @@ struct SettingsView: View {
     @ObservedObject var model: SnailModel
     @State private var showRules = false
     @FocusState private var portsFocused: Bool
+    #if DEBUG
+    @Environment(\.isSnapshotCapture) private var isSnapshotCapture
+    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -147,10 +150,13 @@ struct SettingsView: View {
                         .accessibilityValue(model.portsText + (model.portsValidationMessage.map { ". " + $0 } ?? ""))
                 }
                 if let message = model.portsValidationMessage {
-                    Label(message, systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundStyle(.yellow)
-                        .fixedSize(horizontal: false, vertical: true)
+                    Label {
+                        Text(message).foregroundStyle(.primary)
+                    } icon: {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    }
+                    .font(.caption)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
             }
         } header: {
@@ -216,7 +222,7 @@ struct SettingsView: View {
     private var statusBar: some View {
         HStack(spacing: 8) {
             if let error = model.errorMessage {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
                 Text(error).font(.callout).lineLimit(2)
             } else {
                 Image(systemName: "info.circle").foregroundStyle(.secondary)
@@ -227,13 +233,34 @@ struct SettingsView: View {
                 ProgressView().controlSize(.small)
             }
             if model.hasPendingChanges {
-                Button("Apply Now") { model.apply() }
+                styledApplyNowButton
                     .keyboardShortcut(.defaultAction)
                     .disabled(model.isBusy)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private var styledApplyNowButton: some View {
+        #if DEBUG
+        if isSnapshotCapture {
+            applyNowButton.buttonStyle(SnapshotApplyNowButtonStyle())
+        } else {
+            nativeApplyNowButton
+        }
+        #else
+        nativeApplyNowButton
+        #endif
+    }
+
+    private var nativeApplyNowButton: some View {
+        applyNowButton.buttonStyle(.borderedProminent)
+    }
+
+    private var applyNowButton: some View {
+        Button("Apply Now") { model.apply() }
     }
 }
 
