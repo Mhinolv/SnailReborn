@@ -6,6 +6,29 @@ import SnailCore
 @testable import SnailApp
 
 final class DebugSnapshotTests: XCTestCase {
+    func testLiveApplyNowUsesNativeStyle() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Sources/SnailApp/SettingsView.swift"))
+        // SwiftUI has no public API to inspect the style of a button without a live window.
+        var debugDepth = 0
+        let liveSource = source.components(separatedBy: .newlines).filter { line in
+            let directive = line.trimmingCharacters(in: .whitespaces)
+            if directive == "#if DEBUG" { debugDepth += 1; return false }
+            if directive == "#endif", debugDepth > 0 { debugDepth -= 1; return false }
+            return debugDepth == 0
+        }.joined(separator: "\n")
+        XCTAssertTrue(liveSource.contains(".buttonStyle(.borderedProminent)"),
+                      "Live Apply Now must use the native borderedProminent style.")
+        XCTAssertTrue(liveSource.contains(".keyboardShortcut(.defaultAction)"))
+        XCTAssertFalse(liveSource.contains("ApplyNowButtonStyle"),
+                       "The snapshot stand-in must stay out of the live view.")
+    }
+
+    func testSnapshotStyleIsOffByDefault() {
+        XCTAssertFalse(EnvironmentValues().isSnapshotCapture)
+    }
+
     @MainActor
     func testCaptureKeepsTopAboveBottom() async throws {
         _ = NSApplication.shared

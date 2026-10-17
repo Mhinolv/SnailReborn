@@ -7,6 +7,9 @@ struct SettingsView: View {
     @ObservedObject var model: SnailModel
     @State private var showRules = false
     @FocusState private var portsFocused: Bool
+    #if DEBUG
+    @Environment(\.isSnapshotCapture) private var isSnapshotCapture
+    #endif
 
     var body: some View {
         VStack(spacing: 0) {
@@ -230,14 +233,34 @@ struct SettingsView: View {
                 ProgressView().controlSize(.small)
             }
             if model.hasPendingChanges {
-                Button("Apply Now") { model.apply() }
-                    .buttonStyle(ApplyNowButtonStyle())
+                styledApplyNowButton
                     .keyboardShortcut(.defaultAction)
                     .disabled(model.isBusy)
             }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
+    }
+
+    @ViewBuilder
+    private var styledApplyNowButton: some View {
+        #if DEBUG
+        if isSnapshotCapture {
+            applyNowButton.buttonStyle(SnapshotApplyNowButtonStyle())
+        } else {
+            nativeApplyNowButton
+        }
+        #else
+        nativeApplyNowButton
+        #endif
+    }
+
+    private var nativeApplyNowButton: some View {
+        applyNowButton.buttonStyle(.borderedProminent)
+    }
+
+    private var applyNowButton: some View {
+        Button("Apply Now") { model.apply() }
     }
 }
 
@@ -248,19 +271,5 @@ private extension Text {
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// AppKit omits the native default bezel from offscreen captures.
-private struct ApplyNowButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .padding(.horizontal, 10)
-            .padding(.vertical, 3)
-            .foregroundStyle(.white)
-            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 5))
-            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.5)
     }
 }

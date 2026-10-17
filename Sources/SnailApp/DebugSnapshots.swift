@@ -3,6 +3,31 @@ import AppKit
 import SnailCore
 import SwiftUI
 
+private struct SnapshotCaptureKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var isSnapshotCapture: Bool {
+        get { self[SnapshotCaptureKey.self] }
+        set { self[SnapshotCaptureKey.self] = newValue }
+    }
+}
+
+// AppKit omits the native default bezel from offscreen captures.
+struct SnapshotApplyNowButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 10)
+            .padding(.vertical, 3)
+            .foregroundStyle(.white)
+            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 5))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.5)
+    }
+}
+
 /// Debug-only: `SNAIL_SNAPSHOT_DIR=/path swift run SnailApp` renders the popover and Settings
 /// in light and dark mode to PNGs, then exits. Lets UI be reviewed without clicking the menu bar.
 @MainActor
@@ -122,7 +147,9 @@ enum DebugSnapshots {
     }
 
     static func render<V: View>(_ view: V, to path: String, appearance: NSAppearance.Name) {
-        let host = NSHostingView(rootView: view.background(Color(nsColor: .windowBackgroundColor)))
+        let host = NSHostingView(rootView: view
+            .environment(\.isSnapshotCapture, true)
+            .background(Color(nsColor: .windowBackgroundColor)))
         host.appearance = NSAppearance(named: appearance)
         let size = host.fittingSize
         let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.borderless], backing: .buffered, defer: false)
