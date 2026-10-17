@@ -24,6 +24,12 @@ struct MenuContentView: View {
                     .padding(.bottom, 12)
             }
 
+            if model.budget.showsAlert {
+                budgetBanner
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+            }
+
             if model.hasPendingChanges {
                 pendingBanner
                     .padding(.horizontal, 16)
@@ -89,6 +95,19 @@ struct MenuContentView: View {
         if let active = model.active { return active.summary }
         if model.wifiInterface == nil { return "No Wi‑Fi on this Mac" }
         return "Off · full Wi‑Fi speed"
+    }
+
+    private var budgetBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+            Text("Data budget reached").font(.callout.weight(.semibold))
+            Spacer(minLength: 0)
+            Button(action: model.dismissBudgetAlert) { Image(systemName: "xmark") }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Dismiss data budget alert")
+        }
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 8).fill(Color.orange.opacity(0.15)))
     }
 
     private var pendingBanner: some View {
@@ -166,6 +185,11 @@ struct MenuContentView: View {
             Text("Since launch: \(bytes(model.sessionBytesIn)) down · \(bytes(model.sessionBytesOut)) up")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if model.budget.enabled {
+                Text("Budget: \(SnailModel.usageBytes(model.budget.remainingBytes)) left")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 

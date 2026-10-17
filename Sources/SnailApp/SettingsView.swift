@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var showRules = false
     @State private var showUsageHistory = false
     @FocusState private var portsFocused: Bool
+    @FocusState private var budgetFocused: Bool
     #if DEBUG
     @Environment(\.isSnapshotCapture) private var isSnapshotCapture
     #endif
@@ -24,6 +25,7 @@ struct SettingsView: View {
                 limitSection
                 wifiSection
                 usageSection
+                budgetSection
                 Section {
                     Toggle("Turn off the limit when Snail quits", isOn: $model.turnOffOnQuit)
                 } footer: {
@@ -39,16 +41,25 @@ struct SettingsView: View {
                 statusBar
             }
         }
-        .frame(width: 480)
-        .fixedSize(horizontal: false, vertical: true)
+        .frame(width: 480, height: settingsHeight)
         .onAppear {
             NSApp.activate(ignoringOtherApps: true)
             portsFocused = model.scope == .custom
         }
         .onChange(of: model.scope) { scope in portsFocused = scope == .custom }
+        .onChange(of: budgetFocused) { focused in
+            if !focused { model.commitBudgetAmount() }
+        }
         .onChange(of: portsFocused) { focused in
             if !focused { model.commitPorts() }
         }
+    }
+
+    private var settingsHeight: CGFloat? {
+        #if DEBUG
+        if isSnapshotCapture { return nil }
+        #endif
+        return 720
     }
 
     // MARK: Sections
@@ -192,6 +203,49 @@ struct SettingsView: View {
                     Text(model.active?.summary ?? "Off")
                 }
             }
+        }
+    }
+
+    private var budgetSection: some View {
+        Section {
+            Toggle("Enable data budget", isOn: Binding(
+                get: { model.budget.enabled }, set: { model.setBudgetEnabled($0) }
+            ))
+            LabeledContent("Amount") {
+                HStack {
+                    TextField("Amount", text: $model.budgetAmountText)
+                        .labelsHidden()
+                        .focused($budgetFocused)
+                        .onSubmit { model.commitBudgetAmount() }
+                        .frame(width: 100)
+                        .accessibilityLabel("Data budget amount")
+                    Picker("Unit", selection: Binding(
+                        get: { model.budget.unit }, set: { model.chooseBudgetUnit($0) }
+                    )) {
+                        ForEach(DataBudget.Unit.allCases, id: \.self) { unit in
+                            Text(unit.rawValue).tag(unit)
+                        }
+                    }
+                    .labelsHidden()
+                    .accessibilityLabel("Data budget unit")
+                }
+            }
+            .disabled(!model.budget.enabled)
+            if let message = model.budgetValidationMessage {
+                Label(message, systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption)
+            }
+            LabeledContent("Used", value: SnailModel.usageBytes(model.budget.usedBytes))
+            LabeledContent("Remaining", value: SnailModel.usageBytes(model.budget.remainingBytes))
+            ProgressView(value: model.budget.progress)
+                .accessibilityLabel("Data budget used")
+                .accessibilityValue("\(Int(model.budget.progress * 100)) percent")
+            Button("Reset Budget") { model.resetBudget() }
+        } header: {
+            Text("Data Budget")
+        } footer: {
+            Text("Counts observed Wi-Fi downloads and uploads while enabled. 1 MB = 1,000,000 bytes. 1 GB = 1,000 MB. The alert appears at 100%. The budget does not change the speed limit.")
+                .settingsFooter()
         }
     }
 

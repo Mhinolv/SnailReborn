@@ -33,6 +33,10 @@ final class SnailModel: ObservableObject {
     @Published var usageClearPresented = false
     private var usageHistory: UsageHistory
 
+    private var budgetTracker: DataBudget
+    @Published private(set) var budget: DataBudget
+    @Published var budgetAmountText: String
+
     // Live state
     @Published private(set) var active: ThrottleConfig?
     @Published private(set) var isBusy = false
@@ -70,6 +74,10 @@ final class SnailModel: ObservableObject {
          wifiInterface: String? = WiFi.interfaceName(), samplesAutomatically: Bool = true) {
         self.defaults = defaults
         self.controller = controller
+        let savedBudget = DataBudget.load(from: defaults)
+        budgetTracker = savedBudget
+        budget = savedBudget
+        budgetAmountText = String(savedBudget.amount)
         usageHistory = UsageHistory.load(from: defaults)
         usageDays = usageHistory.days
         let d = defaults
@@ -248,7 +256,51 @@ final class SnailModel: ObservableObject {
         ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
     }
 
+    var budgetValidationMessage: String? {
+        guard let amount = Int(budgetAmountText), (1...DataBudget.maximumAmount).contains(amount) else {
+            return "Enter a whole number from 1 to 1,000,000."
+        }
+        return nil
+    }
+
+    func setBudgetEnabled(_ enabled: Bool) {
+        budgetTracker.setEnabled(enabled)
+        saveBudget()
+    }
+
+    func commitBudgetAmount() {
+        guard budgetValidationMessage == nil, let amount = Int(budgetAmountText) else { return }
+        budgetTracker.setAmount(amount, unit: budget.unit)
+        saveBudget()
+    }
+
+    func chooseBudgetUnit(_ unit: DataBudget.Unit) {
+        guard budgetValidationMessage == nil, let amount = Int(budgetAmountText) else { return }
+        budgetTracker.setAmount(amount, unit: unit)
+        saveBudget()
+    }
+
+    func resetBudget() {
+        budgetTracker.reset()
+        saveBudget()
+    }
+
+    func dismissBudgetAlert() {
+        budgetTracker.dismiss()
+        saveBudget()
+    }
+
+    private func saveBudget() {
+        if budget != budgetTracker { budget = budgetTracker }
+        do { try budgetTracker.save(to: defaults) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
     func recordUsage(interface: String?, counters: InterfaceCounters?, at date: Date) {
+        let showedAlert = budget.showsAlert
+        budgetTracker.sample(interface: interface, counters: counters, at: date)
+        if budgetTracker != budget { budget = budgetTracker }
+        if !showedAlert && budget.showsAlert { saveBudget() }
         let dayChanged = UsageHistory.dayID(usageDate) != UsageHistory.dayID(date)
         usageDate = date
         usageHistory.sample(interface: interface, counters: counters, at: date)
@@ -256,6 +308,7 @@ final class SnailModel: ObservableObject {
     }
 
     func saveUsageHistory() {
+        saveBudget()
         do { try usageHistory.save(to: defaults) }
         catch { errorMessage = error.localizedDescription }
     }

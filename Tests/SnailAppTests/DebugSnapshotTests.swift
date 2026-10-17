@@ -62,6 +62,13 @@ final class DebugSnapshotTests: XCTestCase {
         XCTAssertEqual(files, pngs)
         XCTAssertTrue(files.contains("settings-pending.png"))
         XCTAssertTrue(files.contains("settings-pending-dark.png"))
+        for state in ["disabled", "partial", "reached", "dismissed", "reset", "invalid"] {
+            for appearance in ["light", "dark"] {
+                for view in ["menu", "settings"] {
+                    XCTAssertTrue(files.contains("\(view)-budget-\(state)-\(appearance).png"))
+                }
+            }
+        }
         for state in ["empty", "expanded", "export-error"] {
             for appearance in ["light", "dark"] {
                 XCTAssertTrue(files.contains("settings-usage-\(state)-\(appearance).png"))

@@ -60,6 +60,14 @@ Rows list stored days from oldest to newest. Days without samples have no row.
 Bytes use plain ASCII integers. Observed seconds round down to whole seconds.
 The timezone is the current system timezone at export. The history does not store a timezone for each day.
 
+In Settings, enable **Data Budget** and enter an amount in MB or GB.
+The budget counts observed Wi-Fi downloads and uploads while enabled.
+The units are SI: 1 MB is 1,000,000 bytes. 1 GB is 1,000 MB.
+The popover shows the amount left and an alert at 100%.
+The alert dismissal persists until **Reset Budget**. Reset Budget clears the total and permits the next alert.
+The budget does not change the speed limit. It excludes traffic while Snail is closed or the budget is disabled.
+The budget total and preferences persist across app restarts. **Clear History** does not change the budget.
+
 ### The CLI
 
 ```bash
