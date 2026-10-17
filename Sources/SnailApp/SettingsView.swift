@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var showUsageHistory = false
     @FocusState private var portsFocused: Bool
     @FocusState private var budgetFocused: Bool
+    @FocusState private var remoteAddressFocused: Bool
     #if DEBUG
     @Environment(\.isSnapshotCapture) private var isSnapshotCapture
     #endif
@@ -50,6 +51,9 @@ struct SettingsView: View {
         .onChange(of: budgetFocused) { focused in
             if !focused { model.commitBudgetAmount() }
         }
+        .onChange(of: remoteAddressFocused) { focused in
+            if !focused { model.commitRemoteAddress() }
+        }
         .onChange(of: portsFocused) { focused in
             if !focused { model.commitPorts() }
         }
@@ -88,7 +92,7 @@ struct SettingsView: View {
         } header: {
             Text("Profiles")
         } footer: {
-            Text("A profile saves the speed, limit, and ports. You can save up to 10 profiles.")
+            Text("A profile saves the speed, limit, ports, and server address. You can save up to 10 profiles.")
                 .settingsFooter()
         }
         .alert(model.profileEditorTitle, isPresented: $model.profileEditorPresented) {
@@ -176,6 +180,27 @@ struct SettingsView: View {
                     .font(.caption)
                     .fixedSize(horizontal: false, vertical: true)
                 }
+            }
+            LabeledContent("Only from server") {
+                TextField("Any address", text: $model.remoteAddressText)
+                    .labelsHidden()
+                    .frame(width: 220)
+                    .multilineTextAlignment(.trailing)
+                    .focused($remoteAddressFocused)
+                    .onSubmit { model.commitRemoteAddress() }
+                    .accessibilityLabel("Only from server address")
+                    .accessibilityValue(model.remoteAddressText + (model.remoteAddressValidationMessage.map { ". " + $0 } ?? ""))
+            }
+            Text("Optional. Limits only traffic that comes from this address. Server addresses can change, and many sites can share one address.")
+                .settingsFooter()
+            if let message = model.remoteAddressValidationMessage {
+                Label {
+                    Text(message).foregroundStyle(.primary)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.yellow)
+                }
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
             }
         } header: {
             Text("Speed Limit")

@@ -3,8 +3,7 @@ import Foundation
 /// Pure builders for the pf rules and the root shell scripts that apply/remove them.
 /// Nothing here has side effects, so it is fully unit-testable.
 ///
-/// Inputs are restricted to validated integers, enum raw values, and an interface name
-/// matching `^[a-z]+[0-9]+$`, so no user text is ever interpolated into a shell command.
+/// The caller validates config before use. Scripts also validate all fields, including numeric addresses.
 public enum ThrottleScript {
     /// `/etc/pf.conf` only evaluates `dummynet-anchor "com.apple/*"`.
     public static let anchor = "com.apple/snailreborn"
@@ -19,14 +18,17 @@ public enum ThrottleScript {
 
     public static func pfRules(for config: ThrottleConfig) -> [String] {
         let iface = config.interface
+        let source = config.remoteAddress ?? "any"
         switch config.scope {
         case .web:
-            return ["dummynet in on \(iface) proto { tcp udp } from any port 443 to any pipe \(pipeID)"]
+            return ["dummynet in on \(iface) proto { tcp udp } from \(source) port 443 to any pipe \(pipeID)"]
         case .custom:
             let ports = config.ports.map(String.init).joined(separator: " ")
-            return ["dummynet in on \(iface) proto { tcp udp } from any port { \(ports) } to any pipe \(pipeID)"]
+            return ["dummynet in on \(iface) proto { tcp udp } from \(source) port { \(ports) } to any pipe \(pipeID)"]
         case .all:
-            return ["dummynet in on \(iface) all pipe \(pipeID)"]
+            return [config.remoteAddress == nil
+                ? "dummynet in on \(iface) all pipe \(pipeID)"
+                : "dummynet in on \(iface) from \(source) to any pipe \(pipeID)"]
         }
     }
 

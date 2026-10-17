@@ -7,9 +7,10 @@ public struct SavedProfile: Codable, Equatable, Identifiable, Sendable {
     public let mode: ThrottleConfig.Mode
     public let scope: ThrottleConfig.Scope
     public let ports: [Int]
+    public let remoteAddress: String?
 
     public init(id: UUID = UUID(), name: String, kbps: Int, mode: ThrottleConfig.Mode,
-                scope: ThrottleConfig.Scope, ports: [Int] = []) throws {
+                scope: ThrottleConfig.Scope, ports: [Int] = [], remoteAddress: String? = nil) throws {
         let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard (1...32).contains(name.count) else {
             throw SnailError.invalidConfig("Enter a profile name with 1 to 32 characters.")
@@ -22,15 +23,16 @@ public struct SavedProfile: Codable, Equatable, Identifiable, Sendable {
         self.kbps = kbps
         self.mode = mode
         self.scope = scope
+        self.remoteAddress = try ThrottleConfig.parseRemoteAddress(remoteAddress ?? "")
         self.ports = try ThrottleConfig.validatedPorts(ports, required: scope == .custom)
     }
 
-    public func matches(kbps: Int, mode: ThrottleConfig.Mode, scope: ThrottleConfig.Scope, ports: [Int]) -> Bool {
-        self.kbps == kbps && self.mode == mode && self.scope == scope && self.ports == ports
+    public func matches(kbps: Int, mode: ThrottleConfig.Mode, scope: ThrottleConfig.Scope, ports: [Int], remoteAddress: String? = nil) -> Bool {
+        self.kbps == kbps && self.mode == mode && self.scope == scope && self.ports == ports && self.remoteAddress == remoteAddress
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, kbps, mode, scope, ports
+        case id, name, kbps, mode, scope, ports, remoteAddress
     }
 
     public init(from decoder: Decoder) throws {
@@ -41,12 +43,13 @@ public struct SavedProfile: Codable, Equatable, Identifiable, Sendable {
             kbps: values.decode(Int.self, forKey: .kbps),
             mode: values.decode(ThrottleConfig.Mode.self, forKey: .mode),
             scope: values.decode(ThrottleConfig.Scope.self, forKey: .scope),
-            ports: values.decodeIfPresent([Int].self, forKey: .ports) ?? []
+            ports: values.decodeIfPresent([Int].self, forKey: .ports) ?? [],
+            remoteAddress: values.decodeIfPresent(String.self, forKey: .remoteAddress)
         )
     }
 }
 
-/// Profiles use a separate format. Existing throttle preferences and root state do not change.
+/// Profiles use a separate format with defaults for fields absent from older files.
 public enum SavedProfileStore {
     public static let limit = 10
     public static let key = "savedProfiles"
@@ -54,7 +57,7 @@ public enum SavedProfileStore {
     public static func load(from defaults: UserDefaults) -> [SavedProfile] {
         guard let data = defaults.data(forKey: key),
               let document = try? JSONDecoder().decode(Document.self, from: data),
-              document.version == 1 else { return [] }
+              (1...2).contains(document.version) else { return [] }
         return accepted(document.profiles.compactMap(\.profile))
     }
 
@@ -68,10 +71,10 @@ public enum SavedProfileStore {
         for profile in profiles {
             // Revalidate mutable names before each write, as well as at decode time.
             guard let valid = try? SavedProfile(id: profile.id, name: profile.name, kbps: profile.kbps,
-                                               mode: profile.mode, scope: profile.scope, ports: profile.ports),
+                                               mode: profile.mode, scope: profile.scope, ports: profile.ports, remoteAddress: profile.remoteAddress),
                   !result.contains(where: {
                       $0.id == valid.id || $0.name.caseInsensitiveCompare(valid.name) == .orderedSame ||
-                      $0.matches(kbps: valid.kbps, mode: valid.mode, scope: valid.scope, ports: valid.ports)
+                      $0.matches(kbps: valid.kbps, mode: valid.mode, scope: valid.scope, ports: valid.ports, remoteAddress: valid.remoteAddress)
                   }) else { continue }
             result.append(valid)
             if result.count == limit { break }
@@ -98,7 +101,7 @@ public enum SavedProfileStore {
         let profiles: [Entry]
 
         init(profiles: [SavedProfile]) {
-            version = 1
+            version = 2
             self.profiles = profiles.map(Entry.init)
         }
 

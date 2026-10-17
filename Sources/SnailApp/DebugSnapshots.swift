@@ -81,6 +81,20 @@ enum DebugSnapshots {
             render(SettingsView(model: model), to: "\(dir)/settings-custom-invalid-\(name).png", appearance: appearance)
             model.portsText = "25461, 8080"
         }
+        model.scope = .web
+        for (state, address) in [("empty", ""), ("ipv4", "203.0.113.10"),
+                                 ("ipv6", "2001:db8:1234:5678:abcd:ef01:2345:6789"),
+                                 ("invalid", "server.example.com")] {
+            model.remoteAddressText = address
+            model.commitRemoteAddress()
+            model.debugSimulate(active: model.desiredConfig, error: nil)
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                render(SettingsView(model: model), to: "\(dir)/settings-address-\(state)-\(name).png", appearance: appearance)
+                if state == "ipv4" || state == "ipv6" {
+                    render(MenuContentView(model: model), to: "\(dir)/menu-address-\(state)-\(name).png", appearance: appearance)
+                }
+            }
+        }
         renderProfiles(to: dir)
         renderUsageHistory(to: dir)
         renderBudgets(to: dir)
