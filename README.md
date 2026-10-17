@@ -86,13 +86,14 @@ sudo build/snailctl off
 
 Use `snailctl status --json` for local scripts. The command prints JSON with sorted keys and a final newline.
 The `schemaVersion` is `1`. The `recordedConfig` field contains the saved config. It does not confirm live kernel state.
+The `active` field is `true` for a valid saved config and `false` for an absent state file, with `recordedConfig` set to `null`.
 The report includes `stateFile`, `wifiInterface`, and `bypass`. If Wi-Fi is absent, `wifiInterface` is `null`.
 If no bypass exists, `bypass` is `null`. Otherwise, it contains `interface` and `kind` (`vpn` or `otherInterface`).
 
 | State file | Exit code | Output |
 |---|---|---|
 | Valid | 0 | JSON on stdout |
-| Absent | 3 | Error on stderr only |
+| Absent | 0 | JSON on stdout with `"active": false` and `"recordedConfig": null` |
 | Not valid | 4 | Error on stderr only |
 | Cannot be read | 5 | Error on stderr only |
 

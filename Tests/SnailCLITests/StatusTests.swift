@@ -30,8 +30,9 @@ final class StatusTests: XCTestCase {
                     XCTAssertEqual(result.stderr, "")
                     let data = Data(result.stdout.utf8)
                     let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-                    XCTAssertEqual(Set(json.keys), ["schemaVersion", "recordedConfig", "stateFile", "wifiInterface", "bypass"])
+                    XCTAssertEqual(Set(json.keys), ["schemaVersion", "active", "recordedConfig", "stateFile", "wifiInterface", "bypass"])
                     XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+                    XCTAssertEqual(json["active"] as? Bool, true)
                     XCTAssertEqual(json["stateFile"] as? String, state.path)
                     XCTAssertEqual(json["wifiInterface"] as? String, "en12")
                     XCTAssertTrue(json["bypass"] is NSNull)
@@ -73,9 +74,56 @@ final class StatusTests: XCTestCase {
         }
     }
 
-    func testAbsentStateHasExitThreeAndOnlyStderr() {
-        assertFailure(3, "snailctl: Off. No limit is recorded.\n")
+    func testAbsentStateHasInactiveJSONAndExitZero() throws {
+        let result = status(["--json"])
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stderr, "")
+        let json = try object(result.stdout)
+        XCTAssertEqual(Set(json.keys), ["schemaVersion", "active", "recordedConfig", "stateFile", "wifiInterface", "bypass"])
+        XCTAssertEqual(json["schemaVersion"] as? Int, 1)
+        XCTAssertEqual(json["active"] as? Bool, false)
+        XCTAssertTrue(json["recordedConfig"] is NSNull)
+        XCTAssertEqual(json["stateFile"] as? String, state.path)
+        XCTAssertEqual(json["wifiInterface"] as? String, "en12")
+        XCTAssertTrue(json["bypass"] is NSNull)
+        let formatted = try JSONSerialization.data(withJSONObject: json,
+                                                  options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        XCTAssertEqual(result.stdout, String(decoding: formatted, as: UTF8.self) + "\n")
         assertPlain("Off.\n")
+    }
+
+    func testAbsentStateUsesLiveWiFiAndBypass() throws {
+        for route in [RoutePath.Bypass.vpn(interface: "utun4"), .otherInterface("en7")] {
+            let result = SnailCLI.status(["--json"], controller: controller, wifiInterface: { "en9" }, bypass: { wifi in
+                XCTAssertEqual(wifi, "en9")
+                return route
+            })
+            XCTAssertEqual(result.exitCode, 0)
+            XCTAssertEqual(result.stderr, "")
+            let json = try object(result.stdout)
+            let bypass = try XCTUnwrap(json["bypass"] as? [String: String])
+            XCTAssertEqual(json["wifiInterface"] as? String, "en9")
+            switch route {
+            case .vpn(let interface):
+                XCTAssertEqual(bypass, ["interface": interface, "kind": "vpn"])
+            case .otherInterface(let interface):
+                XCTAssertEqual(bypass, ["interface": interface, "kind": "otherInterface"])
+            }
+        }
+    }
+
+    func testAbsentStateWithoutWiFiHasNullLiveFields() throws {
+        let result = SnailCLI.status(["--json"], controller: controller, wifiInterface: { nil }, bypass: { _ in
+            XCTFail("No route lookup is needed without Wi-Fi")
+            return nil
+        })
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stderr, "")
+        let json = try object(result.stdout)
+        XCTAssertEqual(json["active"] as? Bool, false)
+        XCTAssertTrue(json["recordedConfig"] is NSNull)
+        XCTAssertTrue(json["wifiInterface"] is NSNull)
+        XCTAssertTrue(json["bypass"] is NSNull)
     }
 
     func testInvalidStateHasExitFourAndOnlyStderr() throws {
