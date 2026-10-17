@@ -14,6 +14,11 @@ final class SnailModel: ObservableObject {
     @Published var scope: ThrottleConfig.Scope { didSet { defaults.set(scope.rawValue, forKey: Keys.scope) } }
     @Published var turnOffOnQuit: Bool { didSet { defaults.set(turnOffOnQuit, forKey: Keys.turnOffOnQuit) } }
 
+    @Published var portsText: String
+    @Published private(set) var ports: [Int] {
+        didSet { defaults.set(ports, forKey: Keys.ports) }
+    }
+
     @Published private(set) var appSort: AppSort
 
     // Live state
@@ -35,7 +40,7 @@ final class SnailModel: ObservableObject {
     static let topAppCount = 5
 
     private let defaults: UserDefaults
-    private let controller = ThrottleController(runner: AdminPromptRunner())
+    private let controller: ThrottleController
     private var timer: Timer?
     private var lastCounters: (InterfaceCounters, Date)?
     private let appSampler = AppTrafficSampler()
@@ -44,23 +49,27 @@ final class SnailModel: ObservableObject {
     private var tick = 0
 
     private enum Keys {
-        static let appSort = "appSort"
+        static let ports = "ports", appSort = "appSort"
         static let kbps = "kbps", mode = "mode", scope = "scope", turnOffOnQuit = "turnOffOnQuit"
     }
 
-    init(defaults: UserDefaults = .standard, samplesAutomatically: Bool = true) {
+    init(defaults: UserDefaults = .standard,
+         controller: ThrottleController = ThrottleController(runner: AdminPromptRunner()),
+         wifiInterface: String? = WiFi.interfaceName(), samplesAutomatically: Bool = true) {
         self.defaults = defaults
+        self.controller = controller
         let d = defaults
         kbps = (d.object(forKey: Keys.kbps) as? Int) ?? Preset.sd.kbps
         mode = d.string(forKey: Keys.mode).flatMap(ThrottleConfig.Mode.init(rawValue:)) ?? .perStream
         scope = d.string(forKey: Keys.scope).flatMap(ThrottleConfig.Scope.init(rawValue:)) ?? .web
         turnOffOnQuit = (d.object(forKey: Keys.turnOffOnQuit) as? Bool) ?? true
+        let savedPorts = (d.array(forKey: Keys.ports) as? [Int]) ?? []
+        ports = savedPorts
+        portsText = savedPorts.map(String.init).joined(separator: ", ")
         appSort = d.string(forKey: Keys.appSort).flatMap(AppSort.init(rawValue:)) ?? .download
-        if samplesAutomatically {
-            wifiInterface = WiFi.interfaceName()
-            active = controller.activeConfig()
-            startSampling()
-        }
+        self.wifiInterface = wifiInterface
+        active = controller.activeConfig()
+        if samplesAutomatically { startSampling() }
     }
 
     // MARK: Derived
@@ -69,16 +78,27 @@ final class SnailModel: ObservableObject {
 
     var desiredConfig: ThrottleConfig? {
         guard let wifiInterface else { return nil }
-        return ThrottleConfig(kbps: kbps, mode: mode, scope: scope, interface: wifiInterface)
+        return ThrottleConfig(kbps: kbps, mode: mode, scope: scope, interface: wifiInterface, ports: ports)
     }
 
     /// On, but with different settings than the ones chosen now.
     var hasPendingChanges: Bool {
         guard let active, let desiredConfig else { return false }
-        return active != desiredConfig
+        return active != desiredConfig || (scope == .custom && portsText != ports.map(String.init).joined(separator: ", "))
     }
 
     var preset: Preset? { Preset.matching(kbps: kbps) }
+
+    var portsValidationMessage: String? {
+        guard scope == .custom else { return nil }
+        return (try? ThrottleConfig.parsePorts(portsText)) == nil ? ThrottleConfig.portsError : nil
+    }
+
+    func commitPorts() {
+        guard let parsed = try? ThrottleConfig.parsePorts(portsText) else { return }
+        ports = parsed
+        portsText = parsed.map(String.init).joined(separator: ", ")
+    }
 
     // MARK: Intents
 
@@ -106,6 +126,11 @@ final class SnailModel: ObservableObject {
     }
 
     func apply() {
+        if let message = portsValidationMessage {
+            errorMessage = message
+            return
+        }
+        if scope == .custom { commitPorts() }
         guard let config = desiredConfig else {
             errorMessage = "No Wi‑Fi interface found on this Mac."
             return

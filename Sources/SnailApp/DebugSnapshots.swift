@@ -32,6 +32,17 @@ enum DebugSnapshots {
                                 error: "pfctl: DIOCADDRULE: Operation not permitted")
             render(MenuContentView(model: model), to: "\(dir)/menu-pending-error.png", appearance: .darkAqua)
             render(SettingsView(model: model), to: "\(dir)/settings-pending.png", appearance: .aqua)
+            model.scope = .custom
+            model.portsText = "25461, 8080"
+            model.commitPorts()
+            model.debugSimulate(active: model.desiredConfig, error: nil)
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                render(SettingsView(model: model), to: "\(dir)/settings-custom-\(name).png", appearance: appearance)
+                render(MenuContentView(model: model), to: "\(dir)/menu-custom-\(name).png", appearance: appearance)
+                model.portsText = "0, 65536"
+                render(SettingsView(model: model), to: "\(dir)/settings-custom-invalid-\(name).png", appearance: appearance)
+                model.portsText = "25461, 8080"
+            }
             exit(0)
         }
     }

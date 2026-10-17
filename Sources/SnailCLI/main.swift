@@ -79,6 +79,10 @@ struct SnailCLI {
             case "--fullhd": config.kbps = Preset.fullHD.kbps
             case "--total": config.mode = .total
             case "--per-stream": config.mode = .perStream
+            case "--ports":
+                guard let value = it.next() else { throw SnailError.invalidConfig(ThrottleConfig.portsError) }
+                config.ports = try ThrottleConfig.parsePorts(value)
+                config.scope = .custom
             case "--all-traffic": config.scope = .all
             case "--interface":
                 guard let v = it.next() else { throw SnailError.invalidConfig("--interface needs a name.") }
@@ -95,7 +99,12 @@ struct SnailCLI {
 
     static func describe(_ c: ThrottleConfig) -> String {
         let mode = c.mode == .perStream ? "per stream" : "total"
-        let scope = c.scope == .web ? "web & video (port 443, TCP+QUIC)" : "all traffic"
+        let scope: String
+        switch c.scope {
+        case .web: scope = "web & video (port 443, TCP+QUIC)"
+        case .all: scope = "all traffic"
+        case .custom: scope = "ports \(c.ports.map(String.init).joined(separator: ", ")) (TCP and UDP)"
+        }
         return "\(Rate.format(kbps: c.kbps)) \(mode), \(scope), on \(c.interface)"
     }
 
@@ -116,6 +125,7 @@ struct SnailCLI {
           --kbps <n>                   Custom speed (\(ThrottleConfig.minKbps)–\(ThrottleConfig.maxKbps))
           --per-stream | --total       Limit each connection (default) or all traffic combined
           --all-traffic                Limit everything, not just port 443 (HTTPS/QUIC)
+          --ports "25461, 8080"         Limit 1 to 8 remote TCP/UDP ports
           --interface <name>           Override the auto-detected Wi‑Fi interface
         """)
     }

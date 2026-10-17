@@ -69,22 +69,26 @@ final class ThrottleScriptTests: XCTestCase {
     /// `pfctl -n` parses without loading and works unprivileged, so this checks the real pf grammar.
     func testGeneratedRulesParseWithPfctl() throws {
         for scope in ThrottleConfig.Scope.allCases {
-            var c = config
-            c.scope = scope
-            let rules = ThrottleScript.pfRules(for: c).joined(separator: "\n") + "\n"
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/sbin/pfctl")
-            process.arguments = ["-n", "-f", "-"]
-            let input = Pipe(), output = Pipe()
-            process.standardInput = input
-            process.standardOutput = output
-            process.standardError = output
-            try process.run()
-            input.fileHandleForWriting.write(Data(rules.utf8))
-            try input.fileHandleForWriting.close()
-            process.waitUntilExit()
-            let out = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-            XCTAssertEqual(process.terminationStatus, 0, "pfctl rejected \(scope) rules: \(out)")
+            for family in ["", "inet", "inet6"] {
+                var c = config
+                c.scope = scope
+                c.ports = [1, 2, 3, 4, 5, 6, 25461, 65535]
+                let rules = ThrottleScript.pfRules(for: c).joined(separator: "\n")
+                    .replacingOccurrences(of: "on en0", with: "on en0 \(family)") + "\n"
+                let process = Process()
+                process.executableURL = URL(fileURLWithPath: "/sbin/pfctl")
+                process.arguments = ["-n", "-f", "-"]
+                let input = Pipe(), output = Pipe()
+                process.standardInput = input
+                process.standardOutput = output
+                process.standardError = output
+                try process.run()
+                input.fileHandleForWriting.write(Data(rules.utf8))
+                try input.fileHandleForWriting.close()
+                process.waitUntilExit()
+                let out = String(decoding: output.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+                XCTAssertEqual(process.terminationStatus, 0, "pfctl rejected \(scope) \(family) rules: \(out)")
+            }
         }
     }
 

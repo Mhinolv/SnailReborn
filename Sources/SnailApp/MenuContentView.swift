@@ -138,10 +138,12 @@ struct MenuContentView: View {
     private var speedCaption: String {
         let rate = Rate.format(kbps: model.kbps)
         let unit = model.mode == .perStream ? "per stream" : "total"
+        let suffix = model.scope == .custom
+            ? " on ports \(model.ports.map(String.init).joined(separator: ", "))." : "."
         if let preset = model.preset {
-            return "\(rate) \(unit). Video settles at \(preset.resolution)."
+            return "\(rate) \(unit). Video settles at \(preset.resolution)" + suffix
         }
-        return "\(rate) \(unit). Change it in Settings."
+        return "\(rate) \(unit). Change it in Settings" + suffix
     }
 
     // MARK: Throughput
