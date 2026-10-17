@@ -97,11 +97,49 @@ enum DebugSnapshots {
         }
         renderProfiles(to: dir)
         renderUsageHistory(to: dir)
+        renderBudgets(to: dir)
         let files = try FileManager.default.contentsOfDirectory(atPath: dir)
             .filter { $0.hasSuffix(".png") }.sorted()
         let manifest = try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "files": files],
                                                   options: [.prettyPrinted, .sortedKeys])
         try manifest.write(to: URL(fileURLWithPath: "\(dir)/manifest.json"), options: .atomic)
+    }
+
+    private static func renderBudgets(to dir: String) {
+        let suite = "SnailBudgetSnapshots-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else { return }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = SnailModel(defaults: defaults, wifiInterface: "en12", samplesAutomatically: false)
+        model.debugSimulate(active: nil, error: nil)
+        func renderState(_ state: String) {
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                render(SettingsView(model: model), to: "\(dir)/settings-budget-\(state)-\(name).png", appearance: appearance)
+                render(MenuContentView(model: model), to: "\(dir)/menu-budget-\(state)-\(name).png", appearance: appearance)
+            }
+        }
+        renderState("disabled")
+        model.budgetAmountText = "100"
+        model.commitBudgetAmount()
+        model.setBudgetEnabled(true)
+        let date = Date()
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 0, bytesOut: 0), at: date)
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 40_000_000, bytesOut: 10_000_000),
+                          at: date.addingTimeInterval(1))
+        renderState("partial")
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 90_000_000, bytesOut: 10_000_000),
+                          at: date.addingTimeInterval(2))
+        renderState("reached")
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 110_000_000, bytesOut: 10_000_000),
+                          at: date.addingTimeInterval(3))
+        renderState("over")
+        model.dismissBudgetAlert()
+        renderState("dismissed")
+        model.resetBudget()
+        renderState("reset")
+        model.budgetAmountText = "0"
+        renderState("invalid")
+        model.budgetAmountText = "10000001"
+        renderState("above-maximum")
     }
 
     private static func renderUsageHistory(to dir: String) {
