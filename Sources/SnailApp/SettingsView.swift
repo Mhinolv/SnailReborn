@@ -11,6 +11,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             Form {
+                profilesSection
                 limitSection
                 wifiSection
                 Section {
@@ -41,6 +42,49 @@ struct SettingsView: View {
     }
 
     // MARK: Sections
+
+    private var profilesSection: some View {
+        Section {
+            Picker("Profile", selection: Binding(
+                get: { model.selectedProfile?.id },
+                set: { model.chooseProfile($0) }
+            )) {
+                ForEach(model.profiles) { profile in
+                    Text(profile.name).tag(Optional(profile.id))
+                }
+                if !model.profiles.isEmpty { Divider() }
+                Text("No profile").tag(Optional<UUID>.none)
+            }
+            .pickerStyle(.menu)
+            HStack {
+                Button("Save as Profile…") { model.beginSaveProfile() }
+                    .disabled(!model.canSaveProfile)
+                Button("Rename…") { model.beginRenameProfile() }
+                    .disabled(model.selectedProfile == nil)
+                Button("Delete…") { model.beginDeleteProfile() }
+                    .disabled(model.selectedProfile == nil)
+            }
+        } header: {
+            Text("Profiles")
+        } footer: {
+            Text("A profile saves the speed, limit, and ports. You can save up to 10 profiles.")
+                .settingsFooter()
+        }
+        .alert(model.profileEditorTitle, isPresented: $model.profileEditorPresented) {
+            TextField("Name", text: $model.profileName)
+            Button("Save") { model.confirmProfile() }
+                .keyboardShortcut(.defaultAction)
+                .disabled(!model.canConfirmProfile)
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text(model.profileNameValidationMessage ?? "Save these values on this Mac.")
+        }
+        .confirmationDialog("Delete “\(model.profileToDelete?.name ?? "")”?",
+                            isPresented: $model.profileDeletePresented, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { model.deleteProfile() }
+            Button("Cancel", role: .cancel) { }
+        }
+    }
 
     private var limitSection: some View {
         Section {

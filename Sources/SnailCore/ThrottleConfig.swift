@@ -75,7 +75,7 @@ public struct ThrottleConfig: Codable, Equatable, Sendable {
         return try validatedPorts(ports, required: true)
     }
 
-    private static func validatedPorts(_ ports: [Int], required: Bool) throws -> [Int] {
+    static func validatedPorts(_ ports: [Int], required: Bool) throws -> [Int] {
         var seen = Set<Int>()
         let unique = ports.filter { seen.insert($0).inserted }
         guard (!required || !unique.isEmpty), unique.count <= 8,
