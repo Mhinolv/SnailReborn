@@ -1,12 +1,12 @@
 import Foundation
 
 public struct StatusReport: Encodable {
-    public let recordedConfig: ThrottleConfig
+    public let recordedConfig: ThrottleConfig?
     public let stateFile: String
     public let wifiInterface: String?
     public let bypass: RoutePath.Bypass?
 
-    public init(recordedConfig: ThrottleConfig, stateFile: String, wifiInterface: String?, bypass: RoutePath.Bypass?) {
+    public init(recordedConfig: ThrottleConfig?, stateFile: String, wifiInterface: String?, bypass: RoutePath.Bypass?) {
         self.recordedConfig = recordedConfig
         self.stateFile = stateFile
         self.wifiInterface = wifiInterface
@@ -14,7 +14,7 @@ public struct StatusReport: Encodable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case schemaVersion, recordedConfig, stateFile, wifiInterface, bypass
+        case schemaVersion, active, recordedConfig, stateFile, wifiInterface, bypass
     }
 
     private struct BypassReport: Encodable {
@@ -25,6 +25,7 @@ public struct StatusReport: Encodable {
     public func encode(to encoder: Encoder) throws {
         var values = encoder.container(keyedBy: CodingKeys.self)
         try values.encode(1, forKey: .schemaVersion)
+        try values.encode(recordedConfig != nil, forKey: .active)
         try values.encode(recordedConfig, forKey: .recordedConfig)
         try values.encode(stateFile, forKey: .stateFile)
         try values.encode(wifiInterface, forKey: .wifiInterface)
