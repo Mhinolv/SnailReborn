@@ -96,6 +96,8 @@ struct SnailCLI {
 
     static func parseConfig(_ args: [String]) throws -> ThrottleConfig {
         var config = ThrottleConfig(interface: WiFi.interfaceName() ?? "")
+        var hasPorts = false
+        var hasAllTraffic = false
         var it = args.makeIterator()
         while let arg = it.next() {
             switch arg {
@@ -108,16 +110,22 @@ struct SnailCLI {
             case "--total": config.mode = .total
             case "--per-stream": config.mode = .perStream
             case "--ports":
+                hasPorts = true
                 guard let value = it.next() else { throw SnailError.invalidConfig(ThrottleConfig.portsError) }
                 config.ports = try ThrottleConfig.parsePorts(value)
                 config.scope = .custom
-            case "--all-traffic": config.scope = .all
+            case "--all-traffic":
+                hasAllTraffic = true
+                config.scope = .all
             case "--interface":
                 guard let v = it.next() else { throw SnailError.invalidConfig("--interface needs a name.") }
                 config.interface = v
             default:
                 throw SnailError.invalidConfig("Unknown option “\(arg)”.")
             }
+        }
+        if hasPorts && hasAllTraffic {
+            throw SnailError.invalidConfig("Use --ports or --all-traffic, not both.")
         }
         if config.interface.isEmpty {
             throw SnailError.invalidConfig("No Wi‑Fi interface found. Pass --interface <name>.")

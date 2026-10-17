@@ -128,22 +128,11 @@ struct MenuContentView: View {
             .labelsHidden()
             .disabled(model.isBusy)
 
-            Text(speedCaption)
+            Text(model.speedCaption)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-    }
-
-    private var speedCaption: String {
-        let rate = Rate.format(kbps: model.kbps)
-        let unit = model.mode == .perStream ? "per stream" : "total"
-        let suffix = model.scope == .custom
-            ? " on ports \(model.ports.map(String.init).joined(separator: ", "))." : "."
-        if let preset = model.preset {
-            return "\(rate) \(unit). Video settles at \(preset.resolution)" + suffix
-        }
-        return "\(rate) \(unit). Change it in Settings" + suffix
     }
 
     // MARK: Throughput

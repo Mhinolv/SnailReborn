@@ -1,5 +1,6 @@
 #if DEBUG
 import AppKit
+import QuartzCore
 import SnailCore
 import SwiftUI
 
@@ -32,6 +33,8 @@ enum DebugSnapshots {
                                 error: "pfctl: DIOCADDRULE: Operation not permitted")
             render(MenuContentView(model: model), to: "\(dir)/menu-pending-error.png", appearance: .darkAqua)
             render(SettingsView(model: model), to: "\(dir)/settings-pending.png", appearance: .aqua)
+            render(SettingsView(model: model), to: "\(dir)/settings-pending-dark.png", appearance: .darkAqua)
+            model.kbps = Preset.sd.kbps
             model.scope = .custom
             model.portsText = "25461, 8080"
             model.commitPorts()
@@ -116,8 +119,13 @@ enum DebugSnapshots {
         host.frame = NSRect(origin: .zero, size: size)
         host.layoutSubtreeIfNeeded()
         host.display()
+        // Default buttons draw through layers. Commit them before the offscreen capture.
+        CATransaction.flush()
         guard let rep = host.bitmapImageRepForCachingDisplay(in: host.bounds) else { return }
         host.cacheDisplay(in: host.bounds, to: rep)
+        if let layer = host.layer, let context = NSGraphicsContext(bitmapImageRep: rep) {
+            layer.render(in: context.cgContext)
+        }
         try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
     }
 }

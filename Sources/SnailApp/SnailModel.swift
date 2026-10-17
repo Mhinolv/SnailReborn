@@ -97,6 +97,17 @@ final class SnailModel: ObservableObject {
 
     var preset: Preset? { Preset.matching(kbps: kbps) }
 
+    var speedCaption: String {
+        let rate = Rate.format(kbps: kbps)
+        let unit = mode == .perStream ? "per stream" : "total"
+        let suffix = scope == .custom
+            ? " on ports \(ports.map(String.init).joined(separator: ", "))." : "."
+        if let preset = preset {
+            return "\(rate) \(unit)\(suffix) Video settles at \(preset.resolution)."
+        }
+        return "\(rate) \(unit)\(suffix) Change it in Settings."
+    }
+
     var portsValidationMessage: String? {
         guard scope == .custom else { return nil }
         return (try? ThrottleConfig.parsePorts(portsText)) == nil ? ThrottleConfig.portsError : nil
