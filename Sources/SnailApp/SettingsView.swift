@@ -95,6 +95,7 @@ struct SettingsView: View {
             if model.scope == .custom {
                 LabeledContent("Ports") {
                     TextField("25461, 8080", text: $model.portsText)
+                        .labelsHidden()
                         .frame(width: 180)
                         .focused($portsFocused)
                         .onSubmit { model.commitPorts() }
