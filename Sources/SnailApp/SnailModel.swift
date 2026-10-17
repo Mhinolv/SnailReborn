@@ -1,5 +1,6 @@
 import AppKit
 import SnailCore
+import UniformTypeIdentifiers
 
 /// All app state. Views read from here and call its intents; no shell or pf logic lives in views.
 @MainActor
@@ -264,6 +265,25 @@ final class SnailModel: ObservableObject {
         defaults.removeObject(forKey: UsageHistory.key)
         usageDays = []
         usageClearPresented = false
+    }
+
+    func beginUsageExport() {
+        guard !usageDays.isEmpty, let window = NSApp.keyWindow else { return }
+        let panel = NSSavePanel()
+        panel.title = "Export Usage History"
+        panel.prompt = "Export"
+        panel.nameFieldStringValue = "Snail Wi-Fi Usage \(UsageHistory.dayID(Date())).csv"
+        panel.allowedContentTypes = [.commaSeparatedText]
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK else { return }
+            self?.exportUsageHistory(to: panel.url)
+        }
+    }
+
+    func exportUsageHistory(to url: URL?) {
+        guard let url else { return }
+        do { try UsageCSV.write(usageDays, to: url) }
+        catch { errorMessage = "Could not save the CSV file: \(error.localizedDescription)" }
     }
 
     // MARK: Intents

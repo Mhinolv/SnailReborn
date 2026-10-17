@@ -229,9 +229,15 @@ struct SettingsView: View {
                     .frame(height: min(200, CGFloat(model.usageRows.count + 1) * 28))
                 }
             }
-            LabeledContent("Remove saved daily totals") {
-                Button("Clear History…") { model.usageClearPresented = true }
-                    .disabled(model.usageDays.isEmpty)
+            LabeledContent("Daily totals") {
+                HStack {
+                    Button("Export CSV…") { model.beginUsageExport() }
+                        .buttonStyle(.bordered)
+                        .disabled(model.usageDays.isEmpty)
+                        .help("Save daily Wi‑Fi totals as a CSV file.")
+                    Button("Clear History…") { model.usageClearPresented = true }
+                        .disabled(model.usageDays.isEmpty)
+                }
             }
         } header: {
             Text("Usage History")
