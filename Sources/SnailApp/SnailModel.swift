@@ -21,6 +21,13 @@ final class SnailModel: ObservableObject {
 
     @Published private(set) var appSort: AppSort
 
+    @Published private(set) var profiles: [SavedProfile]
+    @Published var profileEditorPresented = false
+    @Published var profileName = ""
+    @Published var profileDeletePresented = false
+    @Published private(set) var profileToDelete: SavedProfile?
+    private var editedProfileID: UUID?
+
     // Live state
     @Published private(set) var active: ThrottleConfig?
     @Published private(set) var isBusy = false
@@ -67,6 +74,7 @@ final class SnailModel: ObservableObject {
         ports = savedPorts
         portsText = savedPorts.map(String.init).joined(separator: ", ")
         appSort = d.string(forKey: Keys.appSort).flatMap(AppSort.init(rawValue:)) ?? .download
+        profiles = SavedProfileStore.load(from: defaults)
         self.wifiInterface = wifiInterface
         active = controller.activeConfig()
         if samplesAutomatically { startSampling() }
@@ -98,6 +106,95 @@ final class SnailModel: ObservableObject {
         guard let parsed = try? ThrottleConfig.parsePorts(portsText) else { return }
         ports = parsed
         portsText = parsed.map(String.init).joined(separator: ", ")
+    }
+
+    private var profilePorts: [Int]? {
+        scope == .custom ? try? ThrottleConfig.parsePorts(portsText) : ports
+    }
+
+    var selectedProfile: SavedProfile? {
+        guard let profilePorts else { return nil }
+        return profiles.first { $0.matches(kbps: kbps, mode: mode, scope: scope, ports: profilePorts) }
+    }
+
+    var canSaveProfile: Bool {
+        profiles.count < SavedProfileStore.limit && selectedProfile == nil &&
+        (ThrottleConfig.minKbps...ThrottleConfig.maxKbps).contains(kbps) && profilePorts != nil
+    }
+
+    var profileEditorTitle: String { editedProfileID == nil ? "Save as Profile" : "Rename Profile" }
+
+    var profileNameValidationMessage: String? {
+        let name = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard (1...32).contains(name.count) else { return "Enter a name with 1 to 32 characters." }
+        guard !profiles.contains(where: {
+            $0.id != editedProfileID && $0.name.caseInsensitiveCompare(name) == .orderedSame
+        }) else { return "A profile with this name already exists." }
+        return nil
+    }
+
+    var canConfirmProfile: Bool {
+        profileNameValidationMessage == nil &&
+        (editedProfileID.map { id in profiles.contains { $0.id == id } } ?? canSaveProfile)
+    }
+
+    func chooseProfile(_ id: UUID?) {
+        guard let profile = profiles.first(where: { $0.id == id }) else { return }
+        kbps = profile.kbps
+        mode = profile.mode
+        scope = profile.scope
+        ports = profile.ports
+        portsText = profile.ports.map(String.init).joined(separator: ", ")
+    }
+
+    func beginSaveProfile() {
+        guard canSaveProfile else { return }
+        editedProfileID = nil
+        profileName = ""
+        profileEditorPresented = true
+    }
+
+    func beginRenameProfile() {
+        guard let profile = selectedProfile else { return }
+        editedProfileID = profile.id
+        profileName = profile.name
+        profileEditorPresented = true
+    }
+
+    func confirmProfile() {
+        guard canConfirmProfile else { return }
+        var updated = profiles
+        do {
+            if let id = editedProfileID, let index = updated.firstIndex(where: { $0.id == id }) {
+                updated[index].name = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
+            } else {
+                guard let profilePorts else { return }
+                updated.append(try SavedProfile(name: profileName, kbps: kbps, mode: mode, scope: scope, ports: profilePorts))
+            }
+            try SavedProfileStore.save(updated, to: defaults)
+            profiles = SavedProfileStore.load(from: defaults)
+            profileEditorPresented = false
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    func beginDeleteProfile() {
+        guard let profile = selectedProfile else { return }
+        profileToDelete = profile
+        profileDeletePresented = true
+    }
+
+    func deleteProfile() {
+        guard let profileToDelete else { return }
+        do {
+            try SavedProfileStore.save(profiles.filter { $0.id != profileToDelete.id }, to: defaults)
+            profiles = SavedProfileStore.load(from: defaults)
+            self.profileToDelete = nil
+            profileDeletePresented = false
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     // MARK: Intents

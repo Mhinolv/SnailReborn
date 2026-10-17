@@ -43,8 +43,42 @@ enum DebugSnapshots {
                 render(SettingsView(model: model), to: "\(dir)/settings-custom-invalid-\(name).png", appearance: appearance)
                 model.portsText = "25461, 8080"
             }
+            renderProfiles(to: dir)
             exit(0)
         }
+    }
+
+    private static func renderProfiles(to dir: String) {
+        let suite = "SnailProfileSnapshots-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else { return }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = SnailModel(defaults: defaults, wifiInterface: "en12", samplesAutomatically: false)
+        model.debugSimulate(active: nil, error: nil)
+        func renderState(_ state: String) {
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                render(SettingsView(model: model), to: "\(dir)/settings-profiles-\(state)-\(name).png",
+                       appearance: appearance)
+            }
+        }
+        renderState("empty")
+        for (name, kbps, mode, scope, ports) in [
+            ("Video", 1500, ThrottleConfig.Mode.perStream, ThrottleConfig.Scope.web, ""),
+            ("Data saver", 3000, .total, .all, ""),
+            ("IPTV", 5000, .perStream, .custom, "25461, 8080")
+        ] {
+            model.kbps = kbps
+            model.mode = mode
+            model.scope = scope
+            model.portsText = ports
+            if scope == .custom { model.commitPorts() }
+            model.beginSaveProfile()
+            model.profileName = name
+            model.confirmProfile()
+        }
+        renderState("selected")
+        model.debugSimulate(active: model.desiredConfig, error: nil)
+        model.kbps = 3000
+        renderState("edited")
     }
 
     /// The menu bar glyph off/on, large and at real size, on light and dark bars.
