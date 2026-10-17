@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// What Snail asks the kernel to do. Every field is validated before it reaches a shell.
 public struct ThrottleConfig: Codable, Equatable, Sendable {
@@ -20,7 +21,8 @@ public struct ThrottleConfig: Codable, Equatable, Sendable {
     public static let minKbps = 64
     public static let maxKbps = 1_000_000
 
-    public let version = 2
+    public let version = 3
+    public var remoteAddress: String?
     public var ports: [Int]
 
     public var kbps: Int
@@ -29,12 +31,13 @@ public struct ThrottleConfig: Codable, Equatable, Sendable {
     /// BSD interface name, e.g. "en0".
     public var interface: String
 
-    public init(kbps: Int = Preset.sd.kbps, mode: Mode = .perStream, scope: Scope = .web, interface: String, ports: [Int] = []) {
+    public init(kbps: Int = Preset.sd.kbps, mode: Mode = .perStream, scope: Scope = .web, interface: String, ports: [Int] = [], remoteAddress: String? = nil) {
         self.kbps = kbps
         self.mode = mode
         self.scope = scope
         self.interface = interface
         self.ports = ports
+        self.remoteAddress = remoteAddress
     }
 
     public func validated() throws -> ThrottleConfig {
@@ -45,12 +48,13 @@ public struct ThrottleConfig: Codable, Equatable, Sendable {
             throw SnailError.invalidConfig("“\(interface)” is not a valid network interface name.")
         }
         var config = self
+        config.remoteAddress = try Self.parseRemoteAddress(remoteAddress ?? "")
         config.ports = try Self.validatedPorts(ports, required: scope == .custom)
         return config
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version, kbps, mode, scope, interface, ports
+        case version, kbps, mode, scope, interface, ports, remoteAddress
     }
 
     public init(from decoder: Decoder) throws {
@@ -60,6 +64,31 @@ public struct ThrottleConfig: Codable, Equatable, Sendable {
         scope = try values.decode(Scope.self, forKey: .scope)
         interface = try values.decode(String.self, forKey: .interface)
         ports = try values.decodeIfPresent([Int].self, forKey: .ports) ?? []
+        remoteAddress = try Self.parseRemoteAddress(values.decodeIfPresent(String.self, forKey: .remoteAddress) ?? "")
+    }
+
+    public static let remoteAddressError = "Enter one IPv4 or IPv6 address, for example 203.0.113.10."
+
+    public static func parseRemoteAddress(_ text: String) throws -> String? {
+        guard !text.isEmpty else { return nil }
+        guard text.utf8.count < Int(INET6_ADDRSTRLEN), text.utf8.allSatisfy({
+            (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) || $0 == 46 || $0 == 58
+        }) else { throw SnailError.invalidConfig(remoteAddressError) }
+        if text.contains(".") {
+            let ipv4 = text.split(separator: ":").last ?? Substring(text)
+            let octets = ipv4.split(separator: ".", omittingEmptySubsequences: false)
+            guard octets.count == 4, octets.allSatisfy({ $0.count == 1 || $0.first != "0" }) else {
+                throw SnailError.invalidConfig(remoteAddressError)
+            }
+        }
+        for family in [AF_INET, AF_INET6] {
+            var address = in6_addr()
+            guard text.withCString({ inet_pton(family, $0, &address) }) == 1 else { continue }
+            var buffer = [CChar](repeating: 0, count: Int(INET6_ADDRSTRLEN))
+            guard inet_ntop(family, &address, &buffer, socklen_t(buffer.count)) != nil else { continue }
+            return String(cString: buffer)
+        }
+        throw SnailError.invalidConfig(remoteAddressError)
     }
 
     public static let portsError = "Enter 1 to 8 port numbers from 1 to 65535, separated by commas."

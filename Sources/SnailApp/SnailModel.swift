@@ -14,6 +14,11 @@ final class SnailModel: ObservableObject {
     @Published var scope: ThrottleConfig.Scope { didSet { defaults.set(scope.rawValue, forKey: Keys.scope) } }
     @Published var turnOffOnQuit: Bool { didSet { defaults.set(turnOffOnQuit, forKey: Keys.turnOffOnQuit) } }
 
+    @Published var remoteAddressText: String
+    @Published private(set) var remoteAddress: String? {
+        didSet { defaults.set(remoteAddress, forKey: Keys.remoteAddress) }
+    }
+
     @Published var portsText: String
     @Published private(set) var ports: [Int] {
         didSet { defaults.set(ports, forKey: Keys.ports) }
@@ -60,6 +65,7 @@ final class SnailModel: ObservableObject {
     private var tick = 0
 
     private enum Keys {
+        static let remoteAddress = "remoteAddress"
         static let ports = "ports", appSort = "appSort"
         static let kbps = "kbps", mode = "mode", scope = "scope", turnOffOnQuit = "turnOffOnQuit"
     }
@@ -76,6 +82,9 @@ final class SnailModel: ObservableObject {
         mode = d.string(forKey: Keys.mode).flatMap(ThrottleConfig.Mode.init(rawValue:)) ?? .perStream
         scope = d.string(forKey: Keys.scope).flatMap(ThrottleConfig.Scope.init(rawValue:)) ?? .web
         turnOffOnQuit = (d.object(forKey: Keys.turnOffOnQuit) as? Bool) ?? true
+        let savedAddress = try? ThrottleConfig.parseRemoteAddress(d.string(forKey: Keys.remoteAddress) ?? "")
+        remoteAddress = savedAddress
+        remoteAddressText = savedAddress ?? ""
         let savedPorts = (d.array(forKey: Keys.ports) as? [Int]) ?? []
         ports = savedPorts
         portsText = savedPorts.map(String.init).joined(separator: ", ")
@@ -92,7 +101,7 @@ final class SnailModel: ObservableObject {
 
     var desiredConfig: ThrottleConfig? {
         guard let wifiInterface else { return nil }
-        return ThrottleConfig(kbps: kbps, mode: mode, scope: scope, interface: wifiInterface, ports: ports)
+        return ThrottleConfig(kbps: kbps, mode: mode, scope: scope, interface: wifiInterface, ports: ports, remoteAddress: remoteAddress)
     }
 
     /// On, but with different settings than the ones chosen now.
@@ -114,6 +123,19 @@ final class SnailModel: ObservableObject {
         return "\(rate) \(unit)\(suffix) Change it in Settings."
     }
 
+    var remoteAddressValidationMessage: String? {
+        do {
+            _ = try ThrottleConfig.parseRemoteAddress(remoteAddressText)
+            return nil
+        } catch { return ThrottleConfig.remoteAddressError }
+    }
+
+    func commitRemoteAddress() {
+        guard remoteAddressValidationMessage == nil else { return }
+        remoteAddress = try? ThrottleConfig.parseRemoteAddress(remoteAddressText)
+        remoteAddressText = remoteAddress ?? ""
+    }
+
     var portsValidationMessage: String? {
         guard scope == .custom else { return nil }
         return (try? ThrottleConfig.parsePorts(portsText)) == nil ? ThrottleConfig.portsError : nil
@@ -130,13 +152,14 @@ final class SnailModel: ObservableObject {
     }
 
     var selectedProfile: SavedProfile? {
-        guard let profilePorts else { return nil }
-        return profiles.first { $0.matches(kbps: kbps, mode: mode, scope: scope, ports: profilePorts) }
+        guard let profilePorts, remoteAddressValidationMessage == nil else { return nil }
+        let address = try? ThrottleConfig.parseRemoteAddress(remoteAddressText)
+        return profiles.first { $0.matches(kbps: kbps, mode: mode, scope: scope, ports: profilePorts, remoteAddress: address) }
     }
 
     var canSaveProfile: Bool {
         profiles.count < SavedProfileStore.limit && selectedProfile == nil &&
-        (ThrottleConfig.minKbps...ThrottleConfig.maxKbps).contains(kbps) && profilePorts != nil
+        (ThrottleConfig.minKbps...ThrottleConfig.maxKbps).contains(kbps) && profilePorts != nil && remoteAddressValidationMessage == nil
     }
 
     var profileEditorTitle: String { editedProfileID == nil ? "Save as Profile" : "Rename Profile" }
@@ -157,6 +180,8 @@ final class SnailModel: ObservableObject {
 
     func chooseProfile(_ id: UUID?) {
         guard let profile = profiles.first(where: { $0.id == id }) else { return }
+        remoteAddress = profile.remoteAddress
+        remoteAddressText = profile.remoteAddress ?? ""
         kbps = profile.kbps
         mode = profile.mode
         scope = profile.scope
@@ -186,7 +211,8 @@ final class SnailModel: ObservableObject {
                 updated[index].name = profileName.trimmingCharacters(in: .whitespacesAndNewlines)
             } else {
                 guard let profilePorts else { return }
-                updated.append(try SavedProfile(name: profileName, kbps: kbps, mode: mode, scope: scope, ports: profilePorts))
+                updated.append(try SavedProfile(name: profileName, kbps: kbps, mode: mode, scope: scope, ports: profilePorts,
+                                                remoteAddress: try ThrottleConfig.parseRemoteAddress(remoteAddressText)))
             }
             try SavedProfileStore.save(updated, to: defaults)
             profiles = SavedProfileStore.load(from: defaults)
@@ -292,6 +318,11 @@ final class SnailModel: ObservableObject {
     }
 
     func apply() {
+        if let message = remoteAddressValidationMessage {
+            errorMessage = message
+            return
+        }
+        commitRemoteAddress()
         if let message = portsValidationMessage {
             errorMessage = message
             return
@@ -434,9 +465,10 @@ final class SnailModel: ObservableObject {
 
 extension ThrottleConfig {
     var summary: String {
+        let suffix = remoteAddress.map { " · from \($0)" } ?? ""
         switch mode {
-        case .perStream: return "Each stream capped at \(Rate.format(kbps: kbps))"
-        case .total: return "Wi‑Fi capped at \(Rate.format(kbps: kbps)) total"
+        case .perStream: return "Each stream capped at \(Rate.format(kbps: kbps))" + suffix
+        case .total: return "Wi‑Fi capped at \(Rate.format(kbps: kbps)) total" + suffix
         }
     }
 }

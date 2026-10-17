@@ -121,6 +121,18 @@ To print custom rules without root, run:
 build/snailctl rules --ports "25461, 8080"
 ```
 
+Use **Only from server** in Settings to limit traffic from one numeric IPv4 or IPv6 address.
+Leave the field empty to match any address. The address combines with the selected scope.
+For example, **Web & video** plus an address matches port 443 from that address only.
+Server addresses can change, and many sites can share one address.
+Snail does not accept DNS names, CIDR ranges, or address lists.
+
+To print rules for one server without root, run:
+
+```bash
+build/snailctl rules --from 203.0.113.10
+```
+
 ## Recovery
 
 If anything looks wrong, run:

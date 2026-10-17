@@ -47,7 +47,7 @@ final class CustomPortsTests: XCTestCase {
         let encoded = try JSONEncoder().encode(config)
         XCTAssertEqual(try JSONDecoder().decode(ThrottleConfig.self, from: encoded), config)
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
-        XCTAssertEqual(json["version"] as? Int, 2)
+        XCTAssertEqual(json["version"] as? Int, 3)
     }
 
     func testControllerRejectsPortsBeforeRunner() {
