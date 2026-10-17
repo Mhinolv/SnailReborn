@@ -1,0 +1,130 @@
+# Snail (SnailReborn)
+
+A macOS menu bar utility that saves bandwidth on Wi‑Fi by capping video streams, the way AT&T's **Video Management / Stream Saver** works on cellular. Each connection is paced to about **1.5 Mbps**. Adaptive players (YouTube, Netflix, HLS/DASH apps) see the lower throughput and drop to SD by themselves, while page loads and small downloads stay fast.
+
+It is inspired by Murus **Snail.app**, which needs a Network Extension. Our MDM (Jamf) blocks Network Extensions, so **this app uses no Network Extension**. It uses the kernel's built-in **pf firewall + dummynet** (`pfctl` / `dnctl`) instead.
+
+## How it works
+
+```
+Menu bar app / snailctl ──▶ root shell script (one admin prompt) ──▶ dnctl pipe 47101 (1500 Kbit/s, per-flow mask)
+                                                                  └▶ pf anchor com.apple/snailreborn:
+                                                                       dummynet in on <Wi‑Fi> proto {tcp udp} from any port 443 → pipe 47101
+```
+
+- **Per stream (default):** `mask dst-port 0xffff` gives every connection its own 1.5 Mbps pipe, as AT&T does.
+- **Total:** all matching Wi‑Fi traffic shares one pipe.
+- **Applies to:** web & video (inbound TCP and QUIC from port 443, the default), or all traffic.
+- Only the Wi‑Fi interface is shaped. Its name is detected with CoreWLAN, not hard-coded to `en0`.
+- Snail only touches its own anchor and pipe. It takes a pf enable reference with `pfctl -E` and gives it back with `pfctl -X`; it never runs `pfctl -d` or a global `dnctl flush`.
+- State lives in `/var/run/snailreborn.{json,token}`. The JSON is world-readable, so the app and CLI always agree. Everything clears at reboot, as pf rules do.
+
+## Requirements
+
+- macOS 13 or later and an **administrator account**. Each on, off, or change asks for your password once; macOS caches it for a few minutes.
+- Xcode or the Command Line Tools (Swift 5.9+) to build.
+
+## Build and run
+
+```bash
+./scripts/build-app.sh
+```
+
+```bash
+open build/SnailReborn.app
+```
+
+A Snail window opens, and a snail-shell icon appears in the menu bar (filled when Stream Saver is on). Closing the window keeps Snail running in the menu bar. Opening the app again from Finder or Launchpad brings the window back. For development, `swift run SnailApp` works too.
+
+On a MacBook with a notch, new menu bar icons usually go on the far left, which can be behind the notch. Snail defaults to a spot near the clock instead. ⌘-drag the icon to move it.
+
+### The app
+
+- **Popover** (click the snail):
+  - The Stream Saver switch.
+  - The speed limit: SD 1.5, HD 3, or Full HD 5 Mbps. Changing it while on applies right away.
+  - Live Wi‑Fi throughput with a 60‑second graph.
+  - **Apps now:** the five busiest apps by download rate (from `nettop`, no root needed). Helpers are grouped under their app.
+  - A warning when a **VPN** (or another interface) is carrying your traffic. The limit can't apply then; see below.
+  - Settings… (⌘,) and Quit (⌘Q).
+- **Settings:**
+  - Custom speed, per-stream vs. total, and web & video vs. all traffic. While on, changes are staged and pushed with **Apply Now**.
+  - Whether quitting turns the limit off (default: yes).
+  - A view of the exact rules.
+  - **Remove Rules** to clean up.
+
+### The CLI
+
+```bash
+sudo build/snailctl on
+```
+
+```bash
+sudo build/snailctl on --hd --total
+```
+
+```bash
+build/snailctl status
+```
+
+```bash
+build/snailctl apps
+```
+
+```bash
+sudo build/snailctl off
+```
+
+`snailctl rules` and `snailctl script on|off` print exactly what would run, without root.
+
+## Verify it works (first run on a new Mac)
+
+1. Turn Stream Saver on, at SD, per stream.
+2. Run a speed test that uses one connection, or watch a YouTube video with quality on Auto. Throughput should settle near 1.5 Mbps, and the video at about 480p.
+3. Check the kernel state:
+
+```bash
+sudo pfctl -a com.apple/snailreborn -s dummynet
+```
+
+```bash
+sudo dnctl list
+```
+
+If Jamf blocks pf, the app shows the `pfctl` error in a yellow banner.
+
+### VPNs bypass the limit
+
+A VPN such as Cloudflare WARP wraps all traffic in one encrypted tunnel (WARP uses WireGuard on UDP 2408). The rule on Wi‑Fi sees a single flow on the wrong port, so nothing is capped, and per-stream shaping can't tell videos apart. Snail detects this by asking the kernel which interface it would route public traffic through, and shows a warning. Disconnect the VPN for the limit to work.
+
+Also note that some apps don't use port 443. IPTV apps like UHF often stream plain HTTP on ports like 25461, so use **All traffic** scope for them.
+
+## Recovery
+
+If anything looks wrong, run:
+
+```bash
+sudo build/snailctl off
+```
+
+Or by hand:
+
+```bash
+sudo pfctl -a com.apple/snailreborn -F all; sudo dnctl pipe delete 47101
+```
+
+A reboot also clears everything.
+
+## Development
+
+```bash
+swift test
+```
+
+Tests cover config validation, rule and script generation (including a real `pfctl -n` parse), AppleScript escaping, and 64-bit interface counters. UI snapshots in light and dark mode, including the On, pending, and error states:
+
+```bash
+SNAIL_SNAPSHOT_DIR=/tmp/shots swift run SnailApp
+```
+
+See [AGENTS.md](AGENTS.md) for contributor rules and [PLAN.md](PLAN.md) for status and next steps.
