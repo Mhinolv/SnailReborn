@@ -16,6 +16,11 @@ public enum WiFi {
 public struct InterfaceCounters: Equatable, Sendable {
     public var bytesIn: UInt64
     public var bytesOut: UInt64
+
+    public init(bytesIn: UInt64, bytesOut: UInt64) {
+        self.bytesIn = bytesIn
+        self.bytesOut = bytesOut
+    }
 }
 
 public enum InterfaceStats {

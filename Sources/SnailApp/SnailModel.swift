@@ -28,6 +28,10 @@ final class SnailModel: ObservableObject {
     @Published private(set) var profileToDelete: SavedProfile?
     private var editedProfileID: UUID?
 
+    @Published private(set) var usageDays: [UsageDay] = []
+    @Published var usageClearPresented = false
+    private var usageHistory: UsageHistory
+
     // Live state
     @Published private(set) var active: ThrottleConfig?
     @Published private(set) var isBusy = false
@@ -65,6 +69,8 @@ final class SnailModel: ObservableObject {
          wifiInterface: String? = WiFi.interfaceName(), samplesAutomatically: Bool = true) {
         self.defaults = defaults
         self.controller = controller
+        usageHistory = UsageHistory.load(from: defaults)
+        usageDays = usageHistory.days
         let d = defaults
         kbps = (d.object(forKey: Keys.kbps) as? Int) ?? Preset.sd.kbps
         mode = d.string(forKey: Keys.mode).flatMap(ThrottleConfig.Mode.init(rawValue:)) ?? .perStream
@@ -208,6 +214,58 @@ final class SnailModel: ObservableObject {
         }
     }
 
+    struct UsageRow: Identifiable {
+        let id: String
+        let label: String
+        let totals: UsageDay?
+    }
+
+    var usageRows: [UsageRow] {
+        guard let oldest = usageDays.last?.id else { return [] }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: usageDate)
+        return (0..<30).compactMap { offset in
+            guard let date = calendar.date(byAdding: .day, value: -offset, to: today) else { return nil }
+            let id = UsageHistory.dayID(date, calendar: calendar)
+            guard id >= oldest else { return nil }
+            let label = offset == 0 ? "Today" : offset == 1 ? "Yesterday" :
+                date.formatted(.dateTime.weekday(.abbreviated).month(.abbreviated).day())
+            return UsageRow(id: id, label: label, totals: usageDays.first { $0.id == id })
+        }
+    }
+
+    private var usageDate = Date()
+
+    var todayUsageText: String {
+        guard let totals = usageDays.first(where: { $0.id == UsageHistory.dayID(usageDate) }) else {
+            return "No data yet"
+        }
+        return "\(Self.usageBytes(totals.bytesIn)) down · \(Self.usageBytes(totals.bytesOut)) up"
+    }
+
+    static func usageBytes(_ bytes: UInt64) -> String {
+        ByteCountFormatter.string(fromByteCount: Int64(clamping: bytes), countStyle: .file)
+    }
+
+    func recordUsage(interface: String?, counters: InterfaceCounters?, at date: Date) {
+        let dayChanged = UsageHistory.dayID(usageDate) != UsageHistory.dayID(date)
+        usageDate = date
+        usageHistory.sample(interface: interface, counters: counters, at: date)
+        if dayChanged || usageDays != usageHistory.days { usageDays = usageHistory.days }
+    }
+
+    func saveUsageHistory() {
+        do { try usageHistory.save(to: defaults) }
+        catch { errorMessage = error.localizedDescription }
+    }
+
+    func clearUsageHistory() {
+        usageHistory.clear()
+        defaults.removeObject(forKey: UsageHistory.key)
+        usageDays = []
+        usageClearPresented = false
+    }
+
     // MARK: Intents
 
     func chooseAppSort(_ sort: AppSort) {
@@ -259,6 +317,7 @@ final class SnailModel: ObservableObject {
 
     /// Called from applicationShouldTerminate. Returns false if the user cancelled the password prompt.
     func prepareToQuit() -> Bool {
+        saveUsageHistory()
         guard isOn, turnOffOnQuit else { return true }
         do {
             try controller.remove()
@@ -334,12 +393,16 @@ final class SnailModel: ObservableObject {
         tick += 1
         if tick % 2 == 0 { sampleApps() }
 
-        guard let iface, let now = InterfaceStats.counters(for: iface) else {
+        let date = Date()
+        let counters = iface.flatMap { InterfaceStats.counters(for: $0) }
+        recordUsage(interface: iface, counters: counters, at: date)
+        if tick % 30 == 0 { saveUsageHistory() }
+        guard iface != nil, let now = counters else {
+            lastCounters = nil
             downKbps = 0
             upKbps = 0
             return
         }
-        let date = Date()
         defer { lastCounters = (now, date) }
         guard let (prev, prevDate) = lastCounters else { return }
         let seconds = max(date.timeIntervalSince(prevDate), 0.001)
