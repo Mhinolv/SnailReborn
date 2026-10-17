@@ -22,6 +22,9 @@ public enum ThrottleScript {
         switch config.scope {
         case .web:
             return ["dummynet in on \(iface) proto { tcp udp } from any port 443 to any pipe \(pipeID)"]
+        case .custom:
+            let ports = config.ports.map(String.init).joined(separator: " ")
+            return ["dummynet in on \(iface) proto { tcp udp } from any port { \(ports) } to any pipe \(pipeID)"]
         case .all:
             return ["dummynet in on \(iface) all pipe \(pipeID)"]
         }

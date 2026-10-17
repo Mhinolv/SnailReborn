@@ -14,7 +14,7 @@ Menu bar app / snailctl ──▶ root shell script (one admin prompt) ──▶
 
 - **Per stream (default):** `mask dst-port 0xffff` gives every connection its own 1.5 Mbps pipe, as AT&T does.
 - **Total:** all matching Wi‑Fi traffic shares one pipe.
-- **Applies to:** web & video (inbound TCP and QUIC from port 443, the default), or all traffic.
+- **Applies to:** web & video (inbound TCP and QUIC from port 443, the default), all traffic, or custom TCP/UDP ports.
 - Only the Wi‑Fi interface is shaped. Its name is detected with CoreWLAN, not hard-coded to `en0`.
 - Snail only touches its own anchor and pipe. It takes a pf enable reference with `pfctl -E` and gives it back with `pfctl -X`; it never runs `pfctl -d` or a global `dnctl flush`.
 - State lives in `/var/run/snailreborn.{json,token}`. The JSON is world-readable, so the app and CLI always agree. Everything clears at reboot, as pf rules do.
@@ -97,7 +97,13 @@ If Jamf blocks pf, the app shows the `pfctl` error in a yellow banner.
 
 A VPN such as Cloudflare WARP wraps all traffic in one encrypted tunnel (WARP uses WireGuard on UDP 2408). The rule on Wi‑Fi sees a single flow on the wrong port, so nothing is capped, and per-stream shaping can't tell videos apart. Snail detects this by asking the kernel which interface it would route public traffic through, and shows a warning. Disconnect the VPN for the limit to work.
 
-Also note that some apps don't use port 443. IPTV apps like UHF often stream plain HTTP on ports like 25461, so use **All traffic** scope for them.
+Some apps use ports other than 443. For IPTV apps such as UHF, select **Custom ports (TCP and UDP)**. Enter the remote ports, such as `25461, 8080`. Snail accepts one to eight ports from 1 to 65535. Use commas or spaces as separators. Snail removes duplicates and keeps the port order.
+
+To print custom rules without root, run:
+
+```bash
+build/snailctl rules --ports "25461, 8080"
+```
 
 ## Recovery
 

@@ -15,6 +15,7 @@ let package = Package(
         .target(name: "SnailCore", path: "Sources/SnailCore"),
         .executableTarget(name: "SnailCLI", dependencies: ["SnailCore"], path: "Sources/SnailCLI"),
         .executableTarget(name: "SnailApp", dependencies: ["SnailCore"], path: "Sources/SnailApp"),
+        .testTarget(name: "SnailAppTests", dependencies: ["SnailApp", "SnailCore"], path: "Tests/SnailAppTests"),
         .testTarget(name: "SnailCoreTests", dependencies: ["SnailCore"], path: "Tests/SnailCoreTests")
     ]
 )

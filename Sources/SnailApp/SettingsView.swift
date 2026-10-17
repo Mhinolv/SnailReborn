@@ -6,6 +6,7 @@ import SnailCore
 struct SettingsView: View {
     @ObservedObject var model: SnailModel
     @State private var showRules = false
+    @FocusState private var portsFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,7 +30,14 @@ struct SettingsView: View {
         }
         .frame(width: 480)
         .fixedSize(horizontal: false, vertical: true)
-        .onAppear { NSApp.activate(ignoringOtherApps: true) }
+        .onAppear {
+            NSApp.activate(ignoringOtherApps: true)
+            portsFocused = model.scope == .custom
+        }
+        .onChange(of: model.scope) { scope in portsFocused = scope == .custom }
+        .onChange(of: portsFocused) { focused in
+            if !focused { model.commitPorts() }
+        }
     }
 
     // MARK: Sections
@@ -80,8 +88,26 @@ struct SettingsView: View {
             Picker("Applies to", selection: $model.scope) {
                 Text("Web & video (HTTPS and QUIC)").tag(ThrottleConfig.Scope.web)
                 Text("All traffic").tag(ThrottleConfig.Scope.all)
+                Text("Custom ports (TCP and UDP)").tag(ThrottleConfig.Scope.custom)
             }
             .pickerStyle(.radioGroup)
+
+            if model.scope == .custom {
+                LabeledContent("Ports") {
+                    TextField("25461, 8080", text: $model.portsText)
+                        .frame(width: 180)
+                        .focused($portsFocused)
+                        .onSubmit { model.commitPorts() }
+                        .accessibilityLabel("Ports")
+                        .accessibilityValue(model.portsText + (model.portsValidationMessage.map { ". " + $0 } ?? ""))
+                }
+                if let message = model.portsValidationMessage {
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.yellow)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
         } header: {
             Text("Speed Limit")
         } footer: {
@@ -133,6 +159,7 @@ struct SettingsView: View {
     }
 
     private var rulesText: String {
+        if let message = model.portsValidationMessage { return message }
         guard let config = model.desiredConfig else { return "No Wi‑Fi interface found." }
         let rules = ThrottleScript.pfRules(for: config).joined(separator: "\n")
         let pipe = "dnctl " + ThrottleScript.pipeArguments(for: config).joined(separator: " ")
