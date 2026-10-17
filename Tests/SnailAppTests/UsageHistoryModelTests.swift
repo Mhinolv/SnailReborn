@@ -62,6 +62,46 @@ final class UsageHistoryModelTests: XCTestCase {
         XCTAssertTrue(runner.scripts.isEmpty)
     }
 
+    @MainActor
+    func testExportSavesCurrentTotalsWithoutChangingHistoryOrPreferences() async throws {
+        let suite = "UsageExportModelTests-\(UUID())"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let runner = SpyRunner()
+        let model = SnailModel(defaults: defaults,
+                               controller: ThrottleController(runner: runner, statePath: NSTemporaryDirectory() + UUID().uuidString),
+                               wifiInterface: "en12", samplesAutomatically: false)
+        let date = Calendar.current.startOfDay(for: Date()).addingTimeInterval(3600)
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 0, bytesOut: 0), at: date)
+        model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 1234, bytesOut: 56),
+                          at: date.addingTimeInterval(2.5))
+        let history = model.usageDays
+        let preferences = defaults.dictionaryRepresentation()
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".csv")
+        defer { try? FileManager.default.removeItem(at: url) }
+        model.exportUsageHistory(to: url)
+        let csv = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertEqual(csv, "date,timezone,bytes_in,bytes_out,observed_seconds\n" +
+                       "\(UsageHistory.dayID(date)),\(TimeZone.current.identifier),1234,56,2\n")
+        XCTAssertEqual(model.usageDays, history)
+        XCTAssertEqual(defaults.dictionaryRepresentation() as NSDictionary, preferences as NSDictionary)
+        XCTAssertNil(model.errorMessage)
+        XCTAssertTrue(runner.scripts.isEmpty)
+
+        model.exportUsageHistory(to: nil)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), csv)
+        XCTAssertEqual(model.usageDays, history)
+        XCTAssertNil(model.errorMessage)
+
+        let invalidURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+            .appendingPathComponent("usage.csv")
+        model.exportUsageHistory(to: invalidURL)
+        XCTAssertTrue(model.errorMessage?.hasPrefix("Could not save the CSV file: ") == true)
+        XCTAssertEqual(model.usageDays, history)
+        XCTAssertEqual(defaults.dictionaryRepresentation() as NSDictionary, preferences as NSDictionary)
+        XCTAssertTrue(runner.scripts.isEmpty)
+    }
+
     private final class SpyRunner: PrivilegedRunner {
         var scripts: [String] = []
         func run(_ script: String) { scripts.append(script) }

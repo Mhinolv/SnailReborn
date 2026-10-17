@@ -53,6 +53,13 @@ On a MacBook with a notch, new menu bar icons usually go on the far left, which 
   - A view of the exact rules.
   - **Remove Rules** to clean up.
 
+In Settings, select **Export CSV…** beside **Clear History…** to save daily Wi-Fi totals.
+The button is disabled when the history has no rows. Export needs no administrator password.
+The CSV uses UTF-8 and these columns: `date,timezone,bytes_in,bytes_out,observed_seconds`.
+Rows list stored days from oldest to newest. Days without samples have no row.
+Bytes use plain ASCII integers. Observed seconds round down to whole seconds.
+The timezone is the current system timezone at export. The history does not store a timezone for each day.
+
 ### The CLI
 
 ```bash

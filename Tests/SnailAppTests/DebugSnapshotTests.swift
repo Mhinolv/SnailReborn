@@ -72,6 +72,11 @@ final class DebugSnapshotTests: XCTestCase {
                 XCTAssertTrue(files.contains("menu-address-\(state)-\(appearance).png"))
             }
         }
+        for state in ["empty", "expanded", "export-error"] {
+            for appearance in ["light", "dark"] {
+                XCTAssertTrue(files.contains("settings-usage-\(state)-\(appearance).png"))
+            }
+        }
     }
 
     @MainActor

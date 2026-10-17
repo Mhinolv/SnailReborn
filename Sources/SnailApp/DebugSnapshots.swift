@@ -124,6 +124,8 @@ enum DebugSnapshots {
                               at: date.addingTimeInterval(1))
         }
         renderState("expanded", expanded: true)
+        model.errorMessage = "Could not save the CSV file: You don’t have permission to save the file."
+        renderState("export-error", expanded: false)
     }
 
     private static func renderProfiles(to dir: String) {
