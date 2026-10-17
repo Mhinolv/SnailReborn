@@ -65,7 +65,6 @@ struct MenuContentView: View {
                 Text(statusText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
 

@@ -122,6 +122,11 @@ struct SnailCLI {
             case "--all-traffic":
                 hasAllTraffic = true
                 config.scope = .all
+            case "--from":
+                guard let value = it.next(), !value.isEmpty else {
+                    throw SnailError.invalidConfig(ThrottleConfig.remoteAddressError)
+                }
+                config.remoteAddress = try ThrottleConfig.parseRemoteAddress(value)
             case "--interface":
                 guard let v = it.next() else { throw SnailError.invalidConfig("--interface needs a name.") }
                 config.interface = v
@@ -146,7 +151,8 @@ struct SnailCLI {
         case .all: scope = "all traffic"
         case .custom: scope = "ports \(c.ports.map(String.init).joined(separator: ", ")) (TCP and UDP)"
         }
-        return "\(Rate.format(kbps: c.kbps)) \(mode), \(scope), on \(c.interface)"
+        return "\(Rate.format(kbps: c.kbps)) \(mode), \(scope), on \(c.interface)" +
+            (c.remoteAddress.map { ", from \($0)" } ?? "")
     }
 
     static func printUsage() {
@@ -167,6 +173,7 @@ struct SnailCLI {
           --per-stream | --total       Limit each connection (default) or all traffic combined
           --all-traffic                Limit everything, not just port 443 (HTTPS/QUIC)
           --ports "25461, 8080"         Limit 1 to 8 remote TCP/UDP ports
+          --from <address>            Limit traffic from one numeric IPv4 or IPv6 address
           --interface <name>           Override the auto-detected Wi‑Fi interface
         """)
     }

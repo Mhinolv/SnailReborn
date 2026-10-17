@@ -62,6 +62,16 @@ final class DebugSnapshotTests: XCTestCase {
         XCTAssertEqual(files, pngs)
         XCTAssertTrue(files.contains("settings-pending.png"))
         XCTAssertTrue(files.contains("settings-pending-dark.png"))
+        for state in ["empty", "ipv4", "ipv6", "invalid"] {
+            for appearance in ["light", "dark"] {
+                XCTAssertTrue(files.contains("settings-address-\(state)-\(appearance).png"))
+            }
+        }
+        for state in ["ipv4", "ipv6"] {
+            for appearance in ["light", "dark"] {
+                XCTAssertTrue(files.contains("menu-address-\(state)-\(appearance).png"))
+            }
+        }
         for state in ["empty", "expanded", "export-error"] {
             for appearance in ["light", "dark"] {
                 XCTAssertTrue(files.contains("settings-usage-\(state)-\(appearance).png"))
