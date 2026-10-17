@@ -231,6 +231,7 @@ struct SettingsView: View {
             }
             if model.hasPendingChanges {
                 Button("Apply Now") { model.apply() }
+                    .buttonStyle(ApplyNowButtonStyle())
                     .keyboardShortcut(.defaultAction)
                     .disabled(model.isBusy)
             }
@@ -247,5 +248,19 @@ private extension Text {
             .multilineTextAlignment(.leading)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+// AppKit omits the native default bezel from offscreen captures.
+private struct ApplyNowButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.horizontal, 10)
+            .padding(.vertical, 3)
+            .foregroundStyle(.white)
+            .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 5))
+            .opacity(isEnabled ? (configuration.isPressed ? 0.8 : 1) : 0.5)
     }
 }
