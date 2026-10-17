@@ -44,8 +44,31 @@ enum DebugSnapshots {
                 model.portsText = "25461, 8080"
             }
             renderProfiles(to: dir)
+            renderUsageHistory(to: dir)
             exit(0)
         }
+    }
+
+    private static func renderUsageHistory(to dir: String) {
+        let suite = "SnailUsageSnapshots-\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else { return }
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let model = SnailModel(defaults: defaults, wifiInterface: "en12", samplesAutomatically: false)
+        func renderState(_ state: String, expanded: Bool) {
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                render(SettingsView(model: model, showUsageHistory: expanded),
+                       to: "\(dir)/settings-usage-\(state)-\(name).png", appearance: appearance)
+            }
+        }
+        renderState("empty", expanded: false)
+        let today = Calendar.current.startOfDay(for: Date()).addingTimeInterval(3600)
+        for offset in [-3, 0] {
+            let date = Calendar.current.date(byAdding: .day, value: offset, to: today)!
+            model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 0, bytesOut: 0), at: date)
+            model.recordUsage(interface: "en12", counters: InterfaceCounters(bytesIn: 412_000_000, bytesOut: 23_000_000),
+                              at: date.addingTimeInterval(1))
+        }
+        renderState("expanded", expanded: true)
     }
 
     private static func renderProfiles(to dir: String) {

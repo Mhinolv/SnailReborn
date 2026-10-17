@@ -6,7 +6,13 @@ import SnailCore
 struct SettingsView: View {
     @ObservedObject var model: SnailModel
     @State private var showRules = false
+    @State private var showUsageHistory = false
     @FocusState private var portsFocused: Bool
+
+    init(model: SnailModel, showUsageHistory: Bool = false) {
+        self.model = model
+        _showUsageHistory = State(initialValue: showUsageHistory)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -14,6 +20,7 @@ struct SettingsView: View {
                 profilesSection
                 limitSection
                 wifiSection
+                usageSection
                 Section {
                     Toggle("Turn off the limit when Snail quits", isOn: $model.turnOffOnQuit)
                 } footer: {
@@ -180,6 +187,63 @@ struct SettingsView: View {
                 }
             }
         }
+    }
+
+    private var usageSection: some View {
+        Section {
+            LabeledContent("Today", value: model.todayUsageText)
+                .monospacedDigit()
+            if !model.usageDays.isEmpty {
+                DisclosureGroup("Last 30 days", isExpanded: $showUsageHistory) {
+                    ScrollView {
+                        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                            GridRow {
+                                Text("Day")
+                                Text("Down").gridColumnAlignment(.trailing)
+                                Text("Up").gridColumnAlignment(.trailing)
+                            }
+                            .font(.caption).foregroundStyle(.secondary)
+                            ForEach(model.usageRows) { row in
+                                GridRow {
+                                    Text(row.label)
+                                    if let totals = row.totals {
+                                        Text(SnailModel.usageBytes(totals.bytesIn)).monospacedDigit()
+                                        Text(SnailModel.usageBytes(totals.bytesOut)).monospacedDigit()
+                                    } else {
+                                        Text("No data").foregroundStyle(.secondary).gridCellColumns(2)
+                                    }
+                                }
+                                .accessibilityElement(children: .ignore)
+                                .accessibilityLabel(usageLabel(row))
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.top, 4)
+                    }
+                    .frame(height: min(200, CGFloat(model.usageRows.count + 1) * 28))
+                }
+            }
+            LabeledContent("Remove saved daily totals") {
+                Button("Clear History…") { model.usageClearPresented = true }
+                    .disabled(model.usageDays.isEmpty)
+            }
+        } header: {
+            Text("Usage History")
+        } footer: {
+            Text("Totals count all Wi‑Fi traffic while Snail is running. Days when Snail was not running show No data.")
+                .settingsFooter()
+        }
+        .confirmationDialog("Clear usage history?", isPresented: $model.usageClearPresented, titleVisibility: .visible) {
+            Button("Clear History", role: .destructive) { model.clearUsageHistory() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This removes all saved daily totals. You cannot undo this.")
+        }
+    }
+
+    private func usageLabel(_ row: SnailModel.UsageRow) -> String {
+        guard let totals = row.totals else { return "\(row.label), no data" }
+        return "\(row.label), \(SnailModel.usageBytes(totals.bytesIn)) down, \(SnailModel.usageBytes(totals.bytesOut)) up"
     }
 
     private var advancedSection: some View {
