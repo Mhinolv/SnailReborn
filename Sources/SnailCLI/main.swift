@@ -76,7 +76,12 @@ struct SnailCLI {
         }
         if args.contains("--json") {
             do {
-                let config = try controller.recordedConfig()
+                let config: ThrottleConfig?
+                do {
+                    config = try controller.recordedConfig()
+                } catch RecordedStateError.absent {
+                    config = nil
+                }
                 let wifi = wifiInterface()
                 let report = StatusReport(recordedConfig: config, stateFile: controller.statePath,
                                           wifiInterface: wifi, bypass: wifi.flatMap(bypass))
